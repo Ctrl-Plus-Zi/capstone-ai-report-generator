@@ -1,0 +1,66 @@
+{
+    "KCISA_CPM_003": {
+      "api_name": "국립중앙박물관_소장품 검색",
+      "base_url": "https://api.kcisa.kr/openapi/API_CPM_003/request",
+      "default_params": {
+        "serviceKey": "4e08662b-dfe0-485d-abe4-5e78cce4c01c", 
+        "numOfRows": "100",
+        "pageNo": "1"
+      },
+      "filter_rules": [
+        {
+            "field": "description",
+            "operator": "substring",
+            "value": "호랑이"
+        },
+        {
+            "field": "subDescription",
+            "operator": "substring",
+            "value": "호랑이"
+        }
+      ],
+      "fields": ["title", "issuedDate", "sizing", "description", "artist", "url", "collectedDate", "localId", "regDt", "subDescription"]
+    },
+    "KCISA_CCA_145": {
+        "api_name": "한국문화정보원 외_전시정보(통합)",
+        "base_url": "https://api.kcisa.kr/openapi/API_CCA_145/request",
+        "default_params": {
+          "serviceKey": "6f086938-b508-4d8c-9a89-5fe89d5de126", 
+          "numOfRows": "100",
+          "pageNo": "2"
+        },
+        "filter_rules": [
+          {
+              "field": "URL",
+              "operator": "substring",
+              "value": "www.museum.go.kr"
+          }
+        ],
+        "fields": [
+            "TITLE",
+            "CNTC_INSTT_NM",
+            "COLLECTED_DATE",
+            "ISSUED_DATE",
+            "DESCRIPTION",
+            "IMAGE_OBJECT",
+            "LOCAL_ID",
+            "URL",
+            "VIEW_COUNT",
+            "SUB_DESCRIPTION",
+            "SPATIAL_COVERAGE",
+            "EVENT_SITE",
+            "GENRE",
+            "DURATION",
+            "NUMBER_PAGES",
+            "TABLE_OF_CONTENTS",
+            "AUTHOR",
+            "CONTACT_POINT",
+            "ACTOR",
+            "CONTRIBUTOR",
+            "AUDIENCE",
+            "CHARGE",
+            "PERIOD",
+            "EVENT_PERIOD"
+        ]
+      }
+  }

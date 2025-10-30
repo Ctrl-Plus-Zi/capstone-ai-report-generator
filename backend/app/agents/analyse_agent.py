@@ -8,8 +8,8 @@ from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 
+# 수집된 자료를 분석하고 보고서 초안을 작성하는 분석 에이전트 노드 생성 
 def create_analyse_agent(tool_llm, summary_llm, toolkit):
-    """조사 결과를 해석해 인사이트로 정리하는 분석 에이전트 노드를 생성합니다."""
 
     def analyse_agent_node(state):
         tools = [
@@ -24,11 +24,11 @@ def create_analyse_agent(tool_llm, summary_llm, toolkit):
 
         system_text = textwrap.dedent(
             """
-            당신은 보고서 작성 파이프라인의 분석 에이전트입니다. 수집된 자료를 검토하고 어떤 관점에서 분석할지 개요를 세우세요.
-            필요한 경우 도구를 호출해 추가 분석을 진행합니다.
+            당신은 문화시설 보고서 자동 작성을 지원하는 분석 에이전트입니다.    
+            수집된 자료를 검토하고 중요한 관점을 파악하여 필요한 경우 후속 도구 호출을 계획하세요.
 
             요청 컨텍스트: {request_context}
-            조사 노트: {research_notes}
+            조사 메모: {research_notes}
             참고 출처: {research_sources}
             """
         ).strip()
@@ -74,17 +74,17 @@ def create_analyse_agent(tool_llm, summary_llm, toolkit):
 
         summary_input = analysis_outline or research_notes
         summary_messages = [
-            SystemMessage(content="보고서에 포함할 핵심 분석 결과를 간결하게 요약해 주세요."),
-            HumanMessage(content=summary_input or "분석에 사용할 입력 자료가 제공되지 않았습니다."),
+            SystemMessage(content="보고서에 대한 핵심 분석 결과를 요약해주세요."),
+            HumanMessage(content=summary_input or "분석 입력이 제공되지 않았습니다."),
         ]
         summary_response = summary_llm.invoke(summary_messages)
         messages.append(summary_response)
         analysis_findings = summary_response.content.strip() if summary_response else (analysis_findings or "")
 
         if not analysis_outline:
-            analysis_outline = "도구와 LLM 분석이 연결되면 여기에서 분석 개요를 정리하세요."
+            analysis_outline = "도구와 LLM 분석이 완료되면 이 부분을 채워 주세요."
         if not analysis_findings:
-            analysis_findings = "도구 연동 이후 분석 결과 요약이 채워질 예정입니다."
+            analysis_findings = "도구 통합이 완료되면 분석 결과가 생성됩니다."
 
         return {
             "messages": messages,

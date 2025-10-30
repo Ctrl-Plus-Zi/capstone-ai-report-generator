@@ -74,6 +74,3 @@ async def health_check() -> dict[str, str]:
 def db_test(db: Session = Depends(get_db)) -> dict[str, str]:
     log_db_ready(db)
     return {"db": "ok"}
-
-
-# 단순화된 헬스체크 엔드포인트만 유지

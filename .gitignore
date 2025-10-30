@@ -77,3 +77,7 @@ __temp_*.py
 *.swp
 *.swo
 *~
+
+# Open API 
+# api_configs.json 
+#api_call_test.py 

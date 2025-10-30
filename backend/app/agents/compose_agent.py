@@ -6,7 +6,6 @@ from typing import List
 
 
 def create_final_report_compose_agent(llm):
-    """최종 보고서를 작성하는 작문 에이전트 노드를 생성합니다."""
 
     def compose_report_node(state):
         request_context = state.get("request_context", {})
@@ -17,19 +16,20 @@ def create_final_report_compose_agent(llm):
 
         prompt = textwrap.dedent(
             """
-            당신은 최종 비즈니스 보고서를 작성하는 작가입니다. 아래 정보를 참고해 Markdown 형식의 문서를 작성하세요.
-            각 주요 섹션(요약, 핵심 인사이트, 권장 사항, 후속 조치 등)은 명확히 구분해 주세요.
+            You are responsible for drafting the final business report. Use the available analysis to prepare a
+            Markdown document with clearly separated sections (Executive Summary, Key Insights, Recommendations,
+            Next Steps).
 
-            요청 컨텍스트:
+            Request context:
             {request_context}
 
-            분석 개요:
+            Analysis outline:
             {analysis_outline}
 
-            분석 결과:
+            Analysis findings:
             {analysis_findings}
 
-            추가 조사 노트:
+            Additional research notes:
             {research_notes}
             """
         ).format(
@@ -41,7 +41,7 @@ def create_final_report_compose_agent(llm):
 
         response = llm.invoke(prompt)
         messages.append(response)
-        final_report = response.content.strip() if response else "보고서 작성은 도구 연동 이후 진행됩니다."
+        final_report = response.content.strip() if response else "Report drafting is pending tool integration."
 
         return {
             "messages": messages,
