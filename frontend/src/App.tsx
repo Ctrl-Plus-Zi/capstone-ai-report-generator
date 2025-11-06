@@ -2,17 +2,20 @@
 
 const API_BASE = 'http://localhost:8000';
 
-interface GenerateReportResponse {
+interface AdvancedReportResponse {
+  id: number;
   organization_name: string;
-  question: string;
-  response: string;
+  report_topic: string;
+  final_report: string;
+  research_sources: string[];
+  analysis_summary: string;
   generated_at: string;
 }
 
 function App() {
   const [organizationName, setOrganizationName] = useState('');
-  const [question, setQuestion] = useState('이 기관에 대해 종합적으로 분석해주세요.');
-  const [response, setResponse] = useState<GenerateReportResponse | null>(null);
+  const [userCommand, setUserCommand] = useState('');
+  const [response, setResponse] = useState<AdvancedReportResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -23,12 +26,12 @@ function App() {
     setResponse(null);
 
     try {
-      const res = await fetch(`${API_BASE}/report/generate`, {
+      const res = await fetch(`${API_BASE}/report/advanced`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           organization_name: organizationName,
-          question: question
+          user_command: userCommand
         })
       });
 
@@ -61,7 +64,7 @@ function App() {
           marginBottom: '30px',
           color: '#333'
         }}>
-          📊 AI 기관 분석 보고서
+          AI 기관 분석 보고서
         </h1>
 
         {/* 입력 폼 */}
@@ -106,12 +109,12 @@ function App() {
                 fontWeight: 'bold',
                 color: '#333'
               }}>
-                질문
+                사용자 명령
               </label>
               <textarea
-                value={question}
-                onChange={(e) => setQuestion(e.target.value)}
-                placeholder="이 기관에 대해 알고 싶은 내용을 입력하세요"
+                value={userCommand}
+                onChange={(e) => setUserCommand(e.target.value)}
+                placeholder="예: 2030 세대의 관람객 유입을 위한 이벤트 기획에 대해 분석하고, 최근 전시 정보와 대표 소장품을 조사해서 보고서를 작성해줘"
                 required
                 style={{
                   width: '100%',
@@ -119,7 +122,7 @@ function App() {
                   border: '1px solid #ddd',
                   borderRadius: '4px',
                   fontSize: '16px',
-                  height: '100px',
+                  height: '120px',
                   resize: 'vertical',
                   boxSizing: 'border-box'
                 }}
@@ -156,7 +159,7 @@ function App() {
             marginBottom: '20px',
             border: '1px solid #ef5350'
           }}>
-            ❌ {error}
+            {error}
           </div>
         )}
 
@@ -175,38 +178,97 @@ function App() {
               borderBottom: '2px solid #007bff',
               paddingBottom: '10px'
             }}>
-              📋 {response.organization_name} 분석 보고서
+              {response.organization_name} 분석 보고서
             </h2>
             
             <div style={{
-              marginBottom: '15px',
-              padding: '10px',
+              marginBottom: '20px',
+              padding: '15px',
               backgroundColor: '#f8f9fa',
               borderRadius: '4px',
               fontSize: '14px',
               color: '#666'
             }}>
-              <strong>질문:</strong> {response.question}
+              <div style={{ marginBottom: '10px' }}>
+                <strong>주제:</strong> {response.report_topic}
+              </div>
+              <div>
+                <strong>보고서 ID:</strong> {response.id}
+              </div>
             </div>
 
+            {response.research_sources.length > 0 && (
+              <div style={{
+                marginBottom: '20px',
+                padding: '15px',
+                backgroundColor: '#e3f2fd',
+                borderRadius: '4px'
+              }}>
+                <strong style={{ display: 'block', marginBottom: '10px', color: '#1976d2' }}>
+                  참고 출처
+                </strong>
+                <ul style={{ margin: 0, paddingLeft: '20px' }}>
+                  {response.research_sources.slice(0, 5).map((source, idx) => (
+                    <li key={idx} style={{ marginBottom: '5px' }}>
+                      <a href={source} target="_blank" rel="noopener noreferrer" style={{ color: '#1976d2', textDecoration: 'none' }}>
+                        {source}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+                {response.research_sources.length > 5 && (
+                  <div style={{ marginTop: '10px', fontSize: '12px', color: '#666' }}>
+                    외 {response.research_sources.length - 5}개
+                  </div>
+                )}
+              </div>
+            )}
+
+            {response.analysis_summary && (
+              <div style={{
+                marginBottom: '20px',
+                padding: '15px',
+                backgroundColor: '#fff3e0',
+                borderRadius: '4px'
+              }}>
+                <strong style={{ display: 'block', marginBottom: '10px', color: '#f57c00' }}>
+                  분석 요약
+                </strong>
+                <div style={{ lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>
+                  {response.analysis_summary}
+                </div>
+              </div>
+            )}
+
             <div style={{
-              lineHeight: '1.6',
-              fontSize: '16px',
-              color: '#333',
-              whiteSpace: 'pre-wrap'
+              marginBottom: '20px',
+              padding: '20px',
+              backgroundColor: '#fafafa',
+              borderRadius: '4px',
+              borderLeft: '4px solid #007bff'
             }}>
-              {response.response}
+              <strong style={{ display: 'block', marginBottom: '15px', fontSize: '18px', color: '#333' }}>
+                최종 보고서
+              </strong>
+              <div 
+                style={{
+                  lineHeight: '1.8',
+                  fontSize: '16px',
+                  color: '#333',
+                  whiteSpace: 'pre-wrap'
+                }}
+                dangerouslySetInnerHTML={{ __html: response.final_report.replace(/\n/g, '<br/>') }}
+              />
             </div>
 
             <div style={{
-              marginTop: '20px',
               padding: '10px',
               backgroundColor: '#e8f5e9',
               borderRadius: '4px',
               fontSize: '12px',
               color: '#2e7d32'
             }}>
-              📅 생성일시: {new Date(response.generated_at).toLocaleString('ko-KR')}
+              생성일시: {new Date(response.generated_at).toLocaleString('ko-KR')}
             </div>
           </div>
         )}

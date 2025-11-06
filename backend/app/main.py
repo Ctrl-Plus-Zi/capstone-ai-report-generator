@@ -11,7 +11,7 @@ from app.db.session import get_db
 from app.models.report import Report
 from app.schemas.report import GenerateReportRequest, GenerateReportResponse
 
-from .api import simple_report
+from .api import simple_report, agent_report
 
 
 logger = logging.getLogger("uvicorn.error")
@@ -30,6 +30,7 @@ app.add_middleware(
 )
 
 app.include_router(simple_report.router)
+app.include_router(agent_report.router)
 
 @app.on_event("startup")
 async def start_heartbeat():
