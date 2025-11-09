@@ -1,12 +1,18 @@
-﻿import React, { useState } from 'react';
+﻿import React, { useState, useMemo } from 'react';
 import './App.css'; 
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { marked } from 'marked';
+
+// marked 옵션 설정
+marked.use({
+  breaks: true, // 줄바꿈을 <br>로 변환
+  gfm: true, // GitHub Flavored Markdown 지원
+});
 // 필요한 아이콘: 건물/기관, 물음표/정보, 분석
 import { 
     faBuilding, 
     faQuestionCircle, 
-    faCircleInfo, 
-    faChartBar 
+    faCircleInfo
 } from '@fortawesome/free-solid-svg-icons'; 
 
 const API_BASE = 'http://localhost:8000';
@@ -66,13 +72,54 @@ function App() {
     }
   };
 
-  const submitButtonClass = `submit-button ${loading ? 'submit-button-disabled' : 'submit-button-active'}`;
+  const submitButtonClass = `submit-button ${loading ? 'submit-button-disabled' : 'submit-button-active'}`;
 
   // 텍스트 영역의 예시 문구
   const userCommandPlaceholder = 
   `예: 2030 세대의 관람객 유입을 위한 이벤트 기획에 대해 분석하고, 최근 전시 정보와 대표 소장품을 조사해서 보고서를 작성해줘`;
 
-  return (
+  // 분석 요약 마크다운을 HTML로 변환
+  const analysisSummaryHtml = useMemo(() => {
+    if (!response?.analysis_summary) return '';
+    try {
+      const html = marked.parse(response.analysis_summary) as string;
+      return html;
+    } catch (error) {
+      console.error('Analysis summary markdown parsing error:', error);
+      return response.analysis_summary.replace(/\n/g, '<br/>');
+    }
+  }, [response?.analysis_summary]);
+
+  // 최종 보고서 마크다운을 HTML로 변환
+  const finalReportHtml = useMemo(() => {
+    if (!response?.final_report) {
+      return '<p>보고서 내용이 없습니다.</p>';
+    }
+    try {
+      // 코드 블록 마커 제거 (```markdown, ``` 등)
+      let markdownText = response.final_report.trim();
+      
+      // 앞뒤의 코드 블록 마커 제거
+      if (markdownText.startsWith('```')) {
+        const lines = markdownText.split('\n');
+        if (lines[0].startsWith('```')) {
+          lines.shift(); // 첫 번째 줄 제거
+        }
+        if (lines[lines.length - 1].trim() === '```') {
+          lines.pop(); // 마지막 줄 제거
+        }
+        markdownText = lines.join('\n').trim();
+      }
+      
+      const html = marked.parse(markdownText) as string;
+      return html;
+    } catch (error) {
+      console.error('Final report markdown parsing error:', error);
+      return response.final_report.replace(/\n/g, '<br/>');
+    }
+  }, [response?.final_report]);
+
+  return (
     <div className="app-container">
       <div className="content-wrapper">
         
@@ -237,9 +284,10 @@ function App() {
                 <strong className="analysis-title">
                   분석 요약
                 </strong>
-                <div className="analysis-content">
-                  {response.analysis_summary}
-                </div>
+                <div 
+                  className="analysis-content"
+                  dangerouslySetInnerHTML={{ __html: analysisSummaryHtml }}
+                />
               </div>
             )}
 
@@ -247,10 +295,10 @@ function App() {
               <strong className="final-report-title">
                 최종 보고서
               </strong>
-              <div 
-                className="final-report-content"
-                dangerouslySetInnerHTML={{ __html: response.final_report.replace(/\n/g, '<br/>') }}
-              />
+              <div 
+                className="final-report-content"
+                dangerouslySetInnerHTML={{ __html: finalReportHtml }}
+              />
             </div>
 
             <div className="generated-at">

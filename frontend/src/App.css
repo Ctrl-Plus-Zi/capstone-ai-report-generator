@@ -217,7 +217,59 @@
 
 .analysis-content {
   line-height: 1.6;
-  white-space: pre-wrap; /* 줄 바꿈 유지 */
+}
+
+/* 분석 요약 마크다운 스타일링 */
+.analysis-content h1,
+.analysis-content h2,
+.analysis-content h3,
+.analysis-content h4,
+.analysis-content h5,
+.analysis-content h6 {
+  margin-top: 20px;
+  margin-bottom: 12px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: #333;
+}
+
+.analysis-content h1 {
+  font-size: 1.75em;
+  border-bottom: 1px solid #eaecef;
+  padding-bottom: 0.3em;
+}
+
+.analysis-content h2 {
+  font-size: 1.5em;
+  border-bottom: 1px solid #eaecef;
+  padding-bottom: 0.3em;
+}
+
+.analysis-content h3 {
+  font-size: 1.25em;
+}
+
+.analysis-content p {
+  margin-bottom: 12px;
+}
+
+.analysis-content ul,
+.analysis-content ol {
+  margin-bottom: 12px;
+  padding-left: 30px;
+}
+
+.analysis-content li {
+  margin-bottom: 6px;
+}
+
+.analysis-content strong {
+  font-weight: 600;
+  color: #333;
+}
+
+.analysis-content em {
+  font-style: italic;
 }
 
 /* 최종 보고서 스타일 */
@@ -241,7 +293,120 @@
   line-height: 1.8;
   font-size: 16px;
   color: #333;
-  white-space: pre-wrap; /* 줄 바꿈 유지 */
+}
+
+/* 마크다운 스타일링 */
+.final-report-content h1,
+.final-report-content h2,
+.final-report-content h3,
+.final-report-content h4,
+.final-report-content h5,
+.final-report-content h6 {
+  margin-top: 24px;
+  margin-bottom: 16px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: #333;
+}
+
+.final-report-content h1 {
+  font-size: 2em;
+  border-bottom: 1px solid #eaecef;
+  padding-bottom: 0.3em;
+}
+
+.final-report-content h2 {
+  font-size: 1.5em;
+  border-bottom: 1px solid #eaecef;
+  padding-bottom: 0.3em;
+}
+
+.final-report-content h3 {
+  font-size: 1.25em;
+}
+
+.final-report-content p {
+  margin-bottom: 16px;
+}
+
+.final-report-content ul,
+.final-report-content ol {
+  margin-bottom: 16px;
+  padding-left: 30px;
+}
+
+.final-report-content li {
+  margin-bottom: 8px;
+}
+
+.final-report-content strong {
+  font-weight: 600;
+  color: #333;
+}
+
+.final-report-content em {
+  font-style: italic;
+}
+
+.final-report-content code {
+  background-color: #f6f8fa;
+  border-radius: 3px;
+  padding: 2px 6px;
+  font-size: 85%;
+  font-family: 'Courier New', monospace;
+}
+
+.final-report-content pre {
+  background-color: #f6f8fa;
+  border-radius: 6px;
+  padding: 16px;
+  overflow-x: auto;
+  margin-bottom: 16px;
+}
+
+.final-report-content pre code {
+  background-color: transparent;
+  padding: 0;
+}
+
+.final-report-content blockquote {
+  border-left: 4px solid #dfe2e5;
+  padding-left: 16px;
+  margin: 16px 0;
+  color: #6a737d;
+}
+
+.final-report-content a {
+  color: #0366d6;
+  text-decoration: none;
+}
+
+.final-report-content a:hover {
+  text-decoration: underline;
+}
+
+.final-report-content hr {
+  height: 0.25em;
+  background-color: #e1e4e8;
+  border: 0;
+  margin: 24px 0;
+}
+
+.final-report-content table {
+  border-collapse: collapse;
+  margin-bottom: 16px;
+  width: 100%;
+}
+
+.final-report-content table th,
+.final-report-content table td {
+  border: 1px solid #dfe2e5;
+  padding: 8px 13px;
+}
+
+.final-report-content table th {
+  background-color: #f6f8fa;
+  font-weight: 600;
 }
 
 /* 생성일시 스타일 */
