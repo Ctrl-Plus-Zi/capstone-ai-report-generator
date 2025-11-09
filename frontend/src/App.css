@@ -372,4 +372,58 @@
   color: #444;
 }
 
+/* 분석 기관명 선택 */
+/* 버튼 그룹 */
+.org-button-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* 버튼 공통 스타일 */
+.org-select-button {
+  flex: 1 1 calc((100% / 3) - 8px); /* 모든 버튼 동일 폭 */
+  padding: 10px 16px;
+  border-radius: 8px;
+  border: 1px solid #dcdcdc;
+  background: #fff;
+  cursor: pointer;
+  text-align: center;
+  transition: 0.2s;
+}
+
+.org-select-button:hover {
+  background: #f4f7ff;
+}
+
+.org-select-button.selected {
+  background-color: #a8d8ff;
+  border-color: #70bfff;     
+  color: #1d3557;            /* 글자색은 진하게 유지 */
+}
+
+/* 마지막 줄 2개일 경우 공간 균등 배분 */
+.org-button-group::after {
+  content: "";
+  flex: 1 1 calc((100% / 3) - 8px);
+}
+
+/* 월 선택 input 아이콘 배치 */
+.month-input-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.month-input-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #4285f4;
+  pointer-events: none; /* 클릭은 input으로 전달 */
+}
+
+.month-input {
+  padding-left: 36px; /* 아이콘 공간 확보 */
+}
 

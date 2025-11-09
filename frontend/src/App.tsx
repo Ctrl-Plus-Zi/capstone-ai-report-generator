@@ -5,7 +5,8 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { 
     faBuilding, 
     faQuestionCircle, 
-    faCircleInfo, 
+    faCircleInfo,
+    faCalendarAlt, 
     faChartBar 
 } from '@fortawesome/free-solid-svg-icons'; 
 
@@ -21,12 +22,20 @@ interface AdvancedReportResponse {
   generated_at: string;
 }
 
+const ORG_LIST = [
+  "국립중앙박물관", "국립현대미술관", "대한민국역사박물관",
+  "서울역사박물관", "전쟁기념관", "서울시립과학관",
+  "서울시립미술관", "예술의전당"
+];
+
 function App() {
   const [organizationName, setOrganizationName] = useState('');
   const [userCommand, setUserCommand] = useState('');
   const [response, setResponse] = useState<AdvancedReportResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [selectedMonth, setSelectedMonth] = useState("");
+
 /* 사용자가 생성한 보고서 저장 */
   const [savedReports, setSavedReports] = useState<AdvancedReportResponse[]>(
   JSON.parse(localStorage.getItem("savedReports") || "[]")
@@ -88,27 +97,59 @@ function App() {
         <div className="card-form">
           <form onSubmit={handleSubmit}>
             
-            {/* 분석 대상 기관명 필드 */}
-            <div className="form-group">
-              <div className="label-container">
+            {/* 기관명 선택 UI */}
+<div className="form-group">
+  <div className="label-container">
                 <FontAwesomeIcon icon={faBuilding} color="#4285f4" />
                 <label className="form-label">
                   분석 대상 기관명 <span style={{color: 'red'}}>*</span>
                 </label>
               </div>
-              <input
-                type="text"
-                value={organizationName}
-                onChange={(e) => setOrganizationName(e.target.value)}
-                placeholder="예: 국립중앙박물관, 윤동주문학관, 서울시립미술관"
-                required={true}
-                className="form-input"
-              />
-              <div className="guidance-text">
+
+  <div className="org-button-group">
+    {ORG_LIST.map((org) => (
+      <button
+        key={org}
+        type="button"
+        className={`org-select-button ${organizationName === org ? "selected" : ""}`}
+        onClick={() => setOrganizationName(org)}
+      >
+        {org}
+      </button>
+    ))}
+  </div>
+
+  {/* 직접 입력 */}
+  <input
+    type="text"
+    className="form-input"
+    placeholder="선택 (직접 입력)"
+    value={organizationName}
+    onChange={(e) => setOrganizationName(e.target.value)}
+    style={{ marginTop: "8px" }}
+  />
+  <div className="guidance-text">
                 <FontAwesomeIcon icon={faCircleInfo} className="icon" />
                 정확한 기관명을 입력하면 더 정밀한 분석이 가능합니다
               </div>
-            </div>
+</div>
+
+<div className="form-group">
+  <div className="label-container">
+    <FontAwesomeIcon icon={faCalendarAlt} color="#4285f4" />
+    <label className="form-label">월 선택 <span style={{color: 'red'}}>*</span></label>
+  </div>
+  <div className="input-with-icon">
+    <input
+      type="month"
+      className="form-input"
+      value={selectedMonth}
+      onChange={(e) => setSelectedMonth(e.target.value)}
+    />
+  </div>
+</div>
+
+
 
             {/* 분석 질문 필드 */}
             <div className="form-group">
