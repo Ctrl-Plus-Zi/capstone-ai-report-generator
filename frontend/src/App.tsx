@@ -1,280 +1,266 @@
 ﻿import React, { useState } from 'react';
+import './App.css'; 
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+// 필요한 아이콘: 건물/기관, 물음표/정보, 분석
+import { 
+    faBuilding, 
+    faQuestionCircle, 
+    faCircleInfo, 
+    faChartBar 
+} from '@fortawesome/free-solid-svg-icons'; 
 
 const API_BASE = 'http://localhost:8000';
 
 interface AdvancedReportResponse {
-  id: number;
-  organization_name: string;
-  report_topic: string;
-  final_report: string;
-  research_sources: string[];
-  analysis_summary: string;
-  generated_at: string;
+  id: number;
+  organization_name: string;
+  report_topic: string;
+  final_report: string;
+  research_sources: string[];
+  analysis_summary: string;
+  generated_at: string;
 }
 
 function App() {
-  const [organizationName, setOrganizationName] = useState('');
-  const [userCommand, setUserCommand] = useState('');
-  const [response, setResponse] = useState<AdvancedReportResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [organizationName, setOrganizationName] = useState('');
+  const [userCommand, setUserCommand] = useState('');
+  const [response, setResponse] = useState<AdvancedReportResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+/* 사용자가 생성한 보고서 저장 */
+  const [savedReports, setSavedReports] = useState<AdvancedReportResponse[]>(
+  JSON.parse(localStorage.getItem("savedReports") || "[]")
+);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-    setResponse(null);
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    setResponse(null);
 
-    try {
-      const res = await fetch(`${API_BASE}/report/advanced`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          organization_name: organizationName,
-          user_command: userCommand
-        })
-      });
+    try {
+      const res = await fetch(`${API_BASE}/report/advanced`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          organization_name: organizationName,
+          user_command: userCommand
+        })
+      });
 
-      if (res.ok) {
-        const result = await res.json();
-        setResponse(result);
-      } else {
-        const errorData = await res.json();
-        setError(errorData.detail || '보고서 생성 실패');
-      }
-    } catch (err) {
-      setError('서버 연결 오류');
-    } finally {
-      setLoading(false);
-    }
-  };
+      if (res.ok) {
+        const result = await res.json();
+        setResponse(result);
+        /* 사용자가 생성한 보고서 저장 */
+        const updated = [...savedReports, result];
+        setSavedReports(updated);
+        localStorage.setItem("savedReports", JSON.stringify(updated));
+      } else {
+        const errorData = await res.json();
+        setError(errorData.detail || '보고서 생성 실패');
+      }
+    } catch (err) {
+      setError('서버 연결 오류');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  return (
-    <div style={{ 
-      minHeight: '100vh', 
-      backgroundColor: '#f5f5f5', 
-      padding: '20px',
-      fontFamily: 'Arial, sans-serif'
-    }}>
-      <div style={{ maxWidth: '800px', margin: '0 auto' }}>
-        
-        {/* 제목 */}
-        <h1 style={{ 
-          textAlign: 'center', 
-          marginBottom: '30px',
-          color: '#333'
-        }}>
-          AI 기관 분석 보고서
-        </h1>
+  const submitButtonClass = `submit-button ${loading ? 'submit-button-disabled' : 'submit-button-active'}`;
 
-        {/* 입력 폼 */}
-        <div style={{
-          backgroundColor: 'white',
-          padding: '30px',
-          borderRadius: '8px',
-          boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-          marginBottom: '20px'
-        }}>
-          <form onSubmit={handleSubmit}>
-            <div style={{ marginBottom: '20px' }}>
-              <label style={{ 
-                display: 'block', 
-                marginBottom: '8px',
-                fontWeight: 'bold',
-                color: '#333'
-              }}>
-                기관명
-              </label>
-              <input
-                type="text"
-                value={organizationName}
-                onChange={(e) => setOrganizationName(e.target.value)}
-                placeholder="예: 국립중앙박물관, 윤동주문학관, 서울시립미술관"
-                required
-                style={{
-                  width: '100%',
-                  padding: '12px',
-                  border: '1px solid #ddd',
-                  borderRadius: '4px',
-                  fontSize: '16px',
-                  boxSizing: 'border-box'
-                }}
-              />
-            </div>
+  // 텍스트 영역의 예시 문구
+  const userCommandPlaceholder = 
+  `예: 2030 세대의 관람객 유입을 위한 이벤트 기획에 대해 분석하고, 최근 전시 정보와 대표 소장품을 조사해서 보고서를 작성해줘`;
 
-            <div style={{ marginBottom: '20px' }}>
-              <label style={{ 
-                display: 'block', 
-                marginBottom: '8px',
-                fontWeight: 'bold',
-                color: '#333'
-              }}>
-                사용자 명령
-              </label>
-              <textarea
-                value={userCommand}
-                onChange={(e) => setUserCommand(e.target.value)}
-                placeholder="예: 2030 세대의 관람객 유입을 위한 이벤트 기획에 대해 분석하고, 최근 전시 정보와 대표 소장품을 조사해서 보고서를 작성해줘"
-                required
-                style={{
-                  width: '100%',
-                  padding: '12px',
-                  border: '1px solid #ddd',
-                  borderRadius: '4px',
-                  fontSize: '16px',
-                  height: '120px',
-                  resize: 'vertical',
-                  boxSizing: 'border-box'
-                }}
-              />
-            </div>
+  return (
+    <div className="app-container">
+      <div className="content-wrapper">
+        
+        {/* 제목 및 서브타이틀 */}
+        <h1 className="main-title">
+          분석 보고서 생성
+        </h1>
+        <p className="subtitle">
+            분석하고자 하는 기관명과 구체적인 질문을 입력해주세요
+        </p>
 
-            <button
-              type="submit"
-              disabled={loading}
-              style={{
-                width: '100%',
-                padding: '15px',
-                backgroundColor: loading ? '#ccc' : '#007bff',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                fontSize: '16px',
-                fontWeight: 'bold',
-                cursor: loading ? 'not-allowed' : 'pointer'
-              }}
-            >
-              {loading ? '🔄 분석 중...' : '📊 보고서 생성'}
-            </button>
-          </form>
+        {/* 입력 폼 */}
+        <div className="card-form">
+          <form onSubmit={handleSubmit}>
+            
+            {/* 분석 대상 기관명 필드 */}
+            <div className="form-group">
+              <div className="label-container">
+                <FontAwesomeIcon icon={faBuilding} color="#4285f4" />
+                <label className="form-label">
+                  분석 대상 기관명 <span style={{color: 'red'}}>*</span>
+                </label>
+              </div>
+              <input
+                type="text"
+                value={organizationName}
+                onChange={(e) => setOrganizationName(e.target.value)}
+                placeholder="예: 국립중앙박물관, 윤동주문학관, 서울시립미술관"
+                required={true}
+                className="form-input"
+              />
+              <div className="guidance-text">
+                <FontAwesomeIcon icon={faCircleInfo} className="icon" />
+                정확한 기관명을 입력하면 더 정밀한 분석이 가능합니다
+              </div>
+            </div>
+
+            {/* 분석 질문 필드 */}
+            <div className="form-group">
+              <div className="label-container">
+                <FontAwesomeIcon icon={faQuestionCircle} color="#4285f4" />
+                <label className="form-label">
+                  분석 질문 <span style={{color: 'red'}}>*</span>
+                </label>
+              </div>
+              <textarea
+                value={userCommand}
+                onChange={(e) => setUserCommand(e.target.value)}
+                placeholder={userCommandPlaceholder}
+                required={true}
+                className="form-input form-textarea"
+              />
+              <div className="guidance-text" style={{justifyContent: 'space-between'}}>
+                <span style={{display: 'flex', alignItems: 'center'}}>
+                    <FontAwesomeIcon icon={faCircleInfo} className="icon" />
+                    구체적이고 명확한 질문일수록 더 유용한 분석 결과를 얻을 수 있습니다
+                </span>
+              </div>
+            </div>
+
+            {/* 버튼 (이미지에 없지만 기능 유지를 위해 포함) */}
+            <button
+  type="submit"
+  disabled={loading}
+  className={submitButtonClass}
+  style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginTop: '20px' }}
+>
+  {loading ? (
+    <>
+      <div className="loading-spinner"></div>
+      분석 요청중...
+    </>
+  ) : (
+    '보고서 생성'
+  )}
+</button>
+
+          </form>
+        </div>
+
+{/* 저장된 보고서 목록 사이드바 */}
+<div className="saved-list-sidebar">
+  <h3 className="saved-title">최근 생성된 보고서</h3>
+
+  {savedReports.length === 0 && (
+    <div className="saved-empty">아직 저장된 보고서가 없습니다.</div>
+  )}
+
+  {savedReports.map((r) => (
+    <div 
+      key={r.id} 
+      className="saved-card"
+      onClick={() => setResponse(r)}
+    >
+      <div className="saved-card-top">
+        <div className="saved-left">
+          <div className="saved-organization">{r.organization_name}</div>
+          <div className="saved-topic">{r.report_topic}</div>
         </div>
+        <span className="saved-status">완료</span>
+      </div>
 
-        {/* 오류 메시지 */}
-        {error && (
-          <div style={{
-            backgroundColor: '#ffebee',
-            color: '#c62828',
-            padding: '15px',
-            borderRadius: '4px',
-            marginBottom: '20px',
-            border: '1px solid #ef5350'
-          }}>
-            {error}
-          </div>
-        )}
 
-        {/* 결과 출력 */}
-        {response && (
-          <div style={{
-            backgroundColor: 'white',
-            padding: '30px',
-            borderRadius: '8px',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-          }}>
-            <h2 style={{ 
-              marginTop: 0, 
-              marginBottom: '20px',
-              color: '#333',
-              borderBottom: '2px solid #007bff',
-              paddingBottom: '10px'
-            }}>
-              {response.organization_name} 분석 보고서
-            </h2>
-            
-            <div style={{
-              marginBottom: '20px',
-              padding: '15px',
-              backgroundColor: '#f8f9fa',
-              borderRadius: '4px',
-              fontSize: '14px',
-              color: '#666'
-            }}>
-              <div style={{ marginBottom: '10px' }}>
-                <strong>주제:</strong> {response.report_topic}
-              </div>
-              <div>
-                <strong>보고서 ID:</strong> {response.id}
-              </div>
-            </div>
-
-            {response.research_sources.length > 0 && (
-              <div style={{
-                marginBottom: '20px',
-                padding: '15px',
-                backgroundColor: '#e3f2fd',
-                borderRadius: '4px'
-              }}>
-                <strong style={{ display: 'block', marginBottom: '10px', color: '#1976d2' }}>
-                  참고 출처
-                </strong>
-                <ul style={{ margin: 0, paddingLeft: '20px' }}>
-                  {response.research_sources.slice(0, 5).map((source, idx) => (
-                    <li key={idx} style={{ marginBottom: '5px' }}>
-                      <a href={source} target="_blank" rel="noopener noreferrer" style={{ color: '#1976d2', textDecoration: 'none' }}>
-                        {source}
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-                {response.research_sources.length > 5 && (
-                  <div style={{ marginTop: '10px', fontSize: '12px', color: '#666' }}>
-                    외 {response.research_sources.length - 5}개
-                  </div>
-                )}
-              </div>
-            )}
-
-            {response.analysis_summary && (
-              <div style={{
-                marginBottom: '20px',
-                padding: '15px',
-                backgroundColor: '#fff3e0',
-                borderRadius: '4px'
-              }}>
-                <strong style={{ display: 'block', marginBottom: '10px', color: '#f57c00' }}>
-                  분석 요약
-                </strong>
-                <div style={{ lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>
-                  {response.analysis_summary}
-                </div>
-              </div>
-            )}
-
-            <div style={{
-              marginBottom: '20px',
-              padding: '20px',
-              backgroundColor: '#fafafa',
-              borderRadius: '4px',
-              borderLeft: '4px solid #007bff'
-            }}>
-              <strong style={{ display: 'block', marginBottom: '15px', fontSize: '18px', color: '#333' }}>
-                최종 보고서
-              </strong>
-              <div 
-                style={{
-                  lineHeight: '1.8',
-                  fontSize: '16px',
-                  color: '#333',
-                  whiteSpace: 'pre-wrap'
-                }}
-                dangerouslySetInnerHTML={{ __html: response.final_report.replace(/\n/g, '<br/>') }}
-              />
-            </div>
-
-            <div style={{
-              padding: '10px',
-              backgroundColor: '#e8f5e9',
-              borderRadius: '4px',
-              fontSize: '12px',
-              color: '#2e7d32'
-            }}>
-              생성일시: {new Date(response.generated_at).toLocaleString('ko-KR')}
-            </div>
-          </div>
-        )}
+      <div className="saved-card-bottom">
+        <span className="saved-date">
+          {new Date(r.generated_at).toLocaleDateString('ko-KR')}
+        </span>
+        <span className="saved-tag">종합 분석</span>
       </div>
     </div>
-  );
+  ))}
+</div>
+
+
+        {/* 오류 메시지 */}
+        {error && (
+          <div className="error-message">
+            {error}
+          </div>
+        )}
+
+        {/* 결과 출력 */}
+        {response && (
+          <div className="result-card">
+            <h2 className="result-title">
+              {response.organization_name} 분석 보고서
+            </h2>
+            
+            <div className="info-summary">
+              <div style={{ marginBottom: '10px' }}>
+                <strong>주제:</strong> {response.report_topic}
+              </div>
+              <div>
+                <strong>보고서 ID:</strong> {response.id}
+              </div>
+            </div>
+
+            {response.research_sources.length > 0 && (
+              <div className="sources-section">
+                <strong className="sources-title">
+                  참고 출처
+                </strong>
+                <ul className="sources-list">
+                  {response.research_sources.slice(0, 5).map((source, idx) => (
+                    <li key={idx}>
+                      <a href={source} target="_blank" rel="noopener noreferrer" className="source-link">
+                        {source}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+                {response.research_sources.length > 5 && (
+                  <div className="more-sources">
+                    외 {response.research_sources.length - 5}개
+                  </div>
+                )}
+              </div>
+            )}
+
+            {response.analysis_summary && (
+              <div className="analysis-summary">
+                <strong className="analysis-title">
+                  분석 요약
+                </strong>
+                <div className="analysis-content">
+                  {response.analysis_summary}
+                </div>
+              </div>
+            )}
+
+            <div className="final-report-section">
+              <strong className="final-report-title">
+                최종 보고서
+              </strong>
+              <div 
+                className="final-report-content"
+                dangerouslySetInnerHTML={{ __html: response.final_report.replace(/\n/g, '<br/>') }}
+              />
+            </div>
+
+            <div className="generated-at">
+              생성일시: {new Date(response.generated_at).toLocaleString('ko-KR')}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export default App;
