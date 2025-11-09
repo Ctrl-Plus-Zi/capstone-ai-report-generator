@@ -11,7 +11,7 @@ h11==0.16.0
 httptools==0.6.4
 idna==3.10
 langchain==0.3.17
-langchain-core==0.3.28
+langchain-core==0.3.33
 langchain-openai==0.2.14
 langgraph==0.2.63
 psycopg[binary]==3.2.10
