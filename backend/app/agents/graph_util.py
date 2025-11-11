@@ -1,7 +1,8 @@
+from __future__ import annotations
 from langchain_core.tools import tool
-from typing import Annotated
+from typing import Annotated, Any
 
-from .api_utils import call_kcisa_api
+from .api_utils import call_kcisa_api, call_kma_asos_daily_api, month_range
 
 
 class ReportingTools:
@@ -102,3 +103,61 @@ class ReportingTools:
         return {
             "analysis_notes": "정성적 피드백 분석 기능은 아직 구현되지 않았습니다."
         }
+
+    @staticmethod
+    @tool
+    def search_performance_info_api(
+        keyword: Annotated[str, "공연 정보를 검색할 키워드 (예: 예술의전당, 연극, 콘서트 등)"] = "예술의전당",
+        num_of_rows: Annotated[int, "조회할 데이터 행 수"] = 50
+    ):
+        """
+        한국문화정보원 공연정보 통합 API(KCISA_CCA_144)를 조회합니다.
+        fields 예: TITLE, DESCRIPTION, IMAGE_OBJECT, LOCAL_ID, EVENT_SITE, GENRE, DURATION,
+                  AUTHOR, ACTOR, CONTRIBUTOR, AUDIENCE, CHARGE, PERIOD, EVENT_PERIOD
+        """
+        result = call_kcisa_api(
+            api_name="KCISA_CCA_144",
+            keyword=keyword,     # filter_rules[0].value(CNTC_INSTT_NM)로도 필터링 됨
+            num_of_rows=num_of_rows
+        )
+
+        if result.get("success"):
+            data = result.get("data", [])
+
+            # URL이 응답에 없을 수도 있으므로(확실하지 않음) 대체 가능 키로 소스 구성
+            def pick_source(it: dict):
+                return it.get("URL") or it.get("IMAGE_OBJECT") or it.get("LOCAL_ID")
+
+            sources = [pick_source(it) for it in data if pick_source(it)]
+
+            return {
+                "notes": f"{result.get('api_description','공연정보')} 검색 완료: 총 {result.get('count', 0)}개의 공연 정보를 찾았습니다.",
+                "sources": sources,
+                "data": data
+            }
+        else:
+            return {
+                "notes": f"공연 정보 검색 실패: {result.get('error', '알 수 없는 오류')}",
+                "sources": [],
+                "data": []
+            }
+
+    @staticmethod
+    @tool
+    def search_weather_daily_api(
+        year: Annotated[int, "연도"] = 2025,
+        month: Annotated[int, "월(1~12)"] = 1,
+        stn_ids: Annotated[str, "지점코드(예: 108=서울)"] = "108",
+        num_of_rows: Annotated[int, "행 수"] = 999,
+    ):
+        """KMA ASOS 일자료(일별)를 월 단위로 조회하는 툴. tm/sumRn/maxTa/minTa 필드를 반환합니다."""
+        try:
+            start_dt, end_dt = month_range(year, month)  # ← 네 함수명과 일치
+        except ValueError as e:
+            return {"notes": f"입력 오류: {e}", "sources": [], "data": []}
+
+        result = call_kma_asos_daily_api(start_dt, end_dt, stn_ids, num_of_rows)
+        if result["success"]:
+            return {"notes": f"{result['api_description']} {year}년 {month}월 조회 완료: 총 {result['count']}개의 일자료.", "sources": [], "data": result["data"]}
+        else:
+            return {"notes": f"날씨 데이터 조회 실패: {result.get('error', '알 수 없는 오류')}", "sources": [], "data": []}
