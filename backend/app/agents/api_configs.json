@@ -27,7 +27,7 @@
         "default_params": {
           "serviceKey": "6f086938-b508-4d8c-9a89-5fe89d5de126", 
           "numOfRows": "100",
-          "pageNo": "2"
+          "pageNo": "1"
         },
         "filter_rules": [
           {
@@ -62,5 +62,53 @@
             "PERIOD",
             "EVENT_PERIOD"
         ]
+      },
+
+      "KCISA_CCA_144": {
+        "api_name": "한국문화정보원 외_공연정보(통합)",
+        "base_url": "https://api.kcisa.kr/openapi/API_CCA_144/request",
+        "default_params": {
+          "serviceKey": "b5e34c6f-110a-4ac5-a5ac-a518222779de",
+          "numOfRows": "50",
+          "pageNo": "1",
+          "keyword": ""                
+        },
+        "filter_rules": [
+          { "field": "CNTC_INSTT_NM", "operator": "substring", "value": "" }  
+        ],
+        "fields": [
+          "TITLE",
+          "DESCRIPTION",
+          "IMAGE_OBJECT",
+          "LOCAL_ID",
+          "SUB_DESCRIPTION",
+          "EVENT_SITE",
+          "GENRE",
+          "DURATION",
+          "AUTHOR",
+          "ACTOR",
+          "CONTRIBUTOR",
+          "AUDIENCE",
+          "CHARGE",
+          "PERIOD"
+        ]
+      },
+      
+      "KMA_ASOS_DAILY": {
+        "api_name": "기상청 ASOS 일자료 (일별)",
+        "base_url": "https://apis.data.go.kr/1360000/AsosDalyInfoService/getWthrDataList",
+        "default_params": {
+          "serviceKey": "df03314b03b92104cc166c269a8bdc2691a1a1c5aafd6ba08fa35198ca26a8a5",
+          "dataType": "JSON",
+          "dataCd": "ASOS",
+          "dateCd": "DAY",
+          "stnIds": "108",         
+          "startDt": "20250101",
+          "endDt": "20250131",
+          "numOfRows": "999",
+          "pageNo": "1"
+        },
+        "fields": ["tm","sumRn","maxTa","minTa"]
       }
+
   }
