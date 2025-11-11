@@ -1,0 +1,86 @@
+# OS artifacts
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Python / FastAPI
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+.eggs/
+# .env  # 주석 처리: .env 파일을 포함하기 위해
+.venv/
+venv/
+env/
+instance/
+build/
+dist/
+pip-wheel-metadata/
+.mypy_cache/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+.cache/
+
+# Logs
+*.log
+logs/
+
+# Node / React
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.temp/
+.tmp/
+dist-*/
+.eslintcache
+.next/
+*.tsbuildinfo
+
+# Frontend build outputs
+build/
+public/build/
+public/dist/
+
+# IDE & tooling
+.idea/
+.vscode/
+*.code-workspace
+
+# Data & secrets
+secrets/
+*.sqlite3
+*.db
+/data/
+/tmp/
+
+# Database
+*.sql
+*.dump
+*.backup
+postgres_data/
+
+# Project specific
+/backend/migrations/versions/*
+!/backend/migrations/versions/.gitkeep
+
+# Documentation & references
+docs/
+references/
+
+# Temporary files
+__temp_*.py
+*.swp
+*.swo
+*~
+
+# Large files / folders to exclude
+2025-09-30-stellarcube/
+
+# Open API 
+# api_configs.json 
+#api_call_test.py 

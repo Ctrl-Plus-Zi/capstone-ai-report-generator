@@ -1,0 +1,540 @@
+/* App.css */
+
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@100..900&display=swap');
+
+/* 전체 레이아웃 스타일 */
+.app-container {
+  min-height: 100vh;
+  background-color: #f5f5f5; 
+  padding: 40px 20px; 
+  font-family: 'Noto Sans KR', sans-serif;
+}
+
+.content-wrapper {
+  max-width: 600px; /* 분석 보고서 생성 이미지에 맞게 너비 유지 */
+  margin: 0 auto;
+}
+
+/* --- 제목 및 안내 문구 스타일 --- */
+.main-title {
+  text-align: center;
+  margin-bottom: 5px; /* 제목과 서브타이틀 사이 간격 좁게 */
+  color: #333;
+  font-size: 28px;
+}
+
+.subtitle {
+  text-align: center;
+  margin-bottom: 30px; /* 제목 아래 안내 문구 간격 */
+  color: #666;
+  font-size: 14px;
+}
+
+/* --- 입력 폼 스타일 (중앙 카드) --- */
+.card-form {
+  background-color: white;
+  padding: 30px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08); 
+  margin-bottom: 20px;
+}
+
+/* --- 폼 그룹 및 라벨 스타일 (아이콘 포함) --- */
+.form-group {
+  margin-bottom: 30px; /* 그룹 간 간격 늘림 */
+}
+
+.label-container {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.form-label {
+  font-weight: bold;
+  color: #333;
+  font-size: 16px;
+  margin-left: 8px; /* 아이콘과 텍스트 간격 */
+}
+
+/* --- 입력 필드/텍스트 영역 공통 스타일 --- */
+.form-input {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 16px;
+  box-sizing: border-box;
+  transition: background-color 0.2s, border-color 0.2s;
+  background-color: #f7f7f7;
+  font-family: 'Noto Sans KR', sans-serif;
+}
+
+.form-input:focus {
+  border-color: #4285f4;
+  outline: none;
+}
+
+.form-textarea {
+  height: 200px; /* 높이 크게 조정 */
+  resize: none; /* 크기 조절 방지 */
+}
+
+/* --- 상세 안내 문구 (회색) --- */
+.guidance-text {
+  font-size: 12px;
+  color: #999;
+  margin-top: 5px;
+  display: flex;
+  align-items: center;
+}
+
+.guidance-text .icon {
+  margin-right: 5px;
+}
+
+/* --- 예시 텍스트 스타일 --- */
+.placeholder-examples {
+    font-size: 14px;
+    color: #888;
+    line-height: 1.5;
+    margin-top: 10px;
+    white-space: pre-wrap;
+}
+
+/* --- 버튼 스타일 (이미지에 없으므로 깔끔하게 유지) --- */
+.submit-button {
+  width: 100%;
+  padding: 15px;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 18px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background-color 0.3s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #4285f4;
+}
+
+.submit-button-disabled {
+  background-color: #a0c3ff;
+  cursor: not-allowed;
+}
+
+.button-icon {
+  margin-right: 8px;
+}
+
+/* --- 오류 및 결과 섹션 (오른쪽 이미지에는 없지만 기존 기능을 유지하며 스타일만 조정) --- */
+.error-message {
+  background-color: #ffebee;
+  color: #c62828;
+  padding: 15px;
+  border-radius: 4px;
+  margin-bottom: 20px;
+  border: 1px solid #ef5350;
+}
+
+.result-card {
+  background-color: white;
+  padding: 30px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.result-title {
+  font-size: 24px;
+  margin-top: 0;
+  margin-bottom: 20px;
+  color: #333;
+  border-bottom: 2px solid #007bff;
+  padding-bottom: 10px;
+}
+
+/* 정보 요약 스타일 */
+.info-summary {
+  margin-bottom: 20px;
+  padding: 15px;
+  background-color: #f8f9fa;
+  border-radius: 4px;
+  font-size: 14px;
+  color: #666;
+}
+
+/* 참고 출처 스타일 */
+.sources-section {
+  margin-bottom: 20px;
+  padding: 15px;
+  background-color: #e3f2fd;
+  border-radius: 4px;
+}
+
+.sources-title {
+  display: block;
+  margin-bottom: 10px;
+  color: #1976d2;
+  font-weight: bold;
+}
+
+.sources-list {
+  margin: 0;
+  padding-left: 20px;
+  list-style-type: disc;
+}
+
+.sources-list li {
+  margin-bottom: 5px;
+}
+
+.source-link {
+  color: #1976d2;
+  text-decoration: none;
+}
+
+.more-sources {
+  margin-top: 10px;
+  font-size: 12px;
+  color: #666;
+}
+
+/* 분석 요약 스타일 */
+.analysis-summary {
+  margin-bottom: 20px;
+  padding: 15px;
+  background-color: #fff3e0;
+  border-radius: 4px;
+}
+
+.analysis-title {
+  display: block;
+  margin-bottom: 10px;
+  color: #f57c00;
+  font-weight: bold;
+}
+
+.analysis-content {
+  line-height: 1.6;
+}
+
+/* 분석 요약 마크다운 스타일링 */
+.analysis-content h1,
+.analysis-content h2,
+.analysis-content h3,
+.analysis-content h4,
+.analysis-content h5,
+.analysis-content h6 {
+  margin-top: 20px;
+  margin-bottom: 12px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: #333;
+}
+
+.analysis-content h1 {
+  font-size: 1.75em;
+  border-bottom: 1px solid #eaecef;
+  padding-bottom: 0.3em;
+}
+
+.analysis-content h2 {
+  font-size: 1.5em;
+  border-bottom: 1px solid #eaecef;
+  padding-bottom: 0.3em;
+}
+
+.analysis-content h3 {
+  font-size: 1.25em;
+}
+
+.analysis-content p {
+  margin-bottom: 12px;
+}
+
+.analysis-content ul,
+.analysis-content ol {
+  margin-bottom: 12px;
+  padding-left: 30px;
+}
+
+.analysis-content li {
+  margin-bottom: 6px;
+}
+
+.analysis-content strong {
+  font-weight: 600;
+  color: #333;
+}
+
+.analysis-content em {
+  font-style: italic;
+}
+
+/* 최종 보고서 스타일 */
+.final-report-section {
+  margin-bottom: 20px;
+  padding: 20px;
+  background-color: #fafafa;
+  border-radius: 4px;
+  border-left: 4px solid #007bff;
+}
+
+.final-report-title {
+  display: block;
+  margin-bottom: 15px;
+  font-size: 18px;
+  color: #333;
+  font-weight: bold;
+}
+
+.final-report-content {
+  line-height: 1.8;
+  font-size: 16px;
+  color: #333;
+}
+
+/* 마크다운 스타일링 */
+.final-report-content h1,
+.final-report-content h2,
+.final-report-content h3,
+.final-report-content h4,
+.final-report-content h5,
+.final-report-content h6 {
+  margin-top: 24px;
+  margin-bottom: 16px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: #333;
+}
+
+.final-report-content h1 {
+  font-size: 2em;
+  border-bottom: 1px solid #eaecef;
+  padding-bottom: 0.3em;
+}
+
+.final-report-content h2 {
+  font-size: 1.5em;
+  border-bottom: 1px solid #eaecef;
+  padding-bottom: 0.3em;
+}
+
+.final-report-content h3 {
+  font-size: 1.25em;
+}
+
+.final-report-content p {
+  margin-bottom: 16px;
+}
+
+.final-report-content ul,
+.final-report-content ol {
+  margin-bottom: 16px;
+  padding-left: 30px;
+}
+
+.final-report-content li {
+  margin-bottom: 8px;
+}
+
+.final-report-content strong {
+  font-weight: 600;
+  color: #333;
+}
+
+.final-report-content em {
+  font-style: italic;
+}
+
+.final-report-content code {
+  background-color: #f6f8fa;
+  border-radius: 3px;
+  padding: 2px 6px;
+  font-size: 85%;
+  font-family: 'Courier New', monospace;
+}
+
+.final-report-content pre {
+  background-color: #f6f8fa;
+  border-radius: 6px;
+  padding: 16px;
+  overflow-x: auto;
+  margin-bottom: 16px;
+}
+
+.final-report-content pre code {
+  background-color: transparent;
+  padding: 0;
+}
+
+.final-report-content blockquote {
+  border-left: 4px solid #dfe2e5;
+  padding-left: 16px;
+  margin: 16px 0;
+  color: #6a737d;
+}
+
+.final-report-content a {
+  color: #0366d6;
+  text-decoration: none;
+}
+
+.final-report-content a:hover {
+  text-decoration: underline;
+}
+
+.final-report-content hr {
+  height: 0.25em;
+  background-color: #e1e4e8;
+  border: 0;
+  margin: 24px 0;
+}
+
+.final-report-content table {
+  border-collapse: collapse;
+  margin-bottom: 16px;
+  width: 100%;
+}
+
+.final-report-content table th,
+.final-report-content table td {
+  border: 1px solid #dfe2e5;
+  padding: 8px 13px;
+}
+
+.final-report-content table th {
+  background-color: #f6f8fa;
+  font-weight: 600;
+}
+
+/* 생성일시 스타일 */
+.generated-at {
+  padding: 10px;
+  background-color: #e8f5e9;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #2e7d32;
+}
+
+/* 분석 요청 중일 때 */
+.loading-spinner {
+  width: 16px;
+  height: 16px;
+  border: 3px solid #ffffff;
+  border-top: 3px solid transparent;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  margin-right: 8px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+
+/* 파일 저장 */
+/* 파일 저장 사이드바 */
+.saved-list-sidebar {
+  position: fixed;      /* 화면에 고정 */
+  top: 0;               /* 상단부터 시작 */
+  right: 0;             /* 오른쪽 끝에 붙이기 */
+  height: 100vh;        /* 화면 높이 전체 */
+  width: 260px;
+  border-left: 1px solid #e5e7eb;
+  padding: 20px 16px;
+  background: #fafafa;
+  overflow-y: auto;     /* 내용 많으면 스크롤 */
+  z-index: 100;         /* 다른 요소 위에 표시 */
+}
+
+.saved-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 14px;
+}
+
+.saved-empty {
+  color: #888;
+  font-size: 14px;
+  margin-top: 20px;
+}
+
+/* 개별 카드 */
+.saved-card {
+  background: white;
+  border-radius: 10px;
+  padding: 14px 16px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+  border: 1px solid #e5e7eb;
+  margin-bottom: 12px;
+  cursor: pointer;
+  transition: 0.15s;
+}
+
+.saved-card:hover {
+  background: #f5f7ff;
+  border-color: #c6d4ff;
+}
+
+/* 카드 상단: 기관명 + 분석 질문 + 완료 버튼 */
+.saved-card-top {
+  display: flex;
+  justify-content: space-between; /* 좌측 정보와 완료 버튼 분리 */
+  align-items: flex-start;        /* 기관명 기준으로 정렬 */
+}
+
+.saved-left {
+  display: flex;
+  flex-direction: column;         /* 기관명 + 분석 질문 세로 배치 */
+  gap: 2px;                       /* 줄 간격 */
+  flex: 1;                         /* 왼쪽 영역 넓이 확보 */
+}
+
+.saved-organization {
+  font-weight: 600;
+  font-size: 15px;
+  color: #111;
+}
+
+.saved-topic {
+  font-size: 13px;
+  color: #666;
+  word-break: break-word;
+}
+
+.saved-status {
+  background: #e6fbe6;
+  color: #2bad52;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap; /* 버튼 텍스트 줄바꿈 방지 */
+}
+
+/* 카드 하단: 날짜 및 태그 */
+.saved-card-bottom {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  align-items: center;
+}
+
+.saved-date {
+  font-size: 13px;
+  color: #666;
+}
+
+.saved-tag {
+  background: #f1f3f5;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #444;
+}
+
+
