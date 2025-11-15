@@ -41,6 +41,10 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [selectedMonth, setSelectedMonth] = useState('');
+
+  // 3단계 진행 표시
+  const [currentStep, setCurrentStep] = useState(1);
+
   const [savedReports, setSavedReports] = useState<AdvancedReportResponse[]>(
     JSON.parse(localStorage.getItem("savedReports") || "[]")
   );
@@ -65,6 +69,7 @@ function App() {
    * ---------------------------- */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setCurrentStep(2); // 분석 진행 단계
     setLoading(true);
     setError('');
     setResponse(null);
@@ -82,6 +87,7 @@ function App() {
       if (res.ok) {
         const result = await res.json();
         setResponse(result);
+        setCurrentStep(3); // 결과 확인 단계
 
         const updated = [...savedReports, result];
         setSavedReports(updated);
@@ -89,9 +95,11 @@ function App() {
       } else {
         const errorData = await res.json();
         setError(errorData.detail || '보고서 생성 실패');
+        setCurrentStep(1); // 실패하면 다시 1단계
       }
     } catch {
       setError('서버 연결 오류');
+      setCurrentStep(1);
     } finally {
       setLoading(false);
     }
@@ -143,6 +151,22 @@ function App() {
         <h1 className="main-title">분석 보고서 생성</h1>
         <p className="subtitle">분석하고자 하는 기관명과 구체적인 질문을 입력해주세요</p>
 
+        {/* 진행 단계 표시 */}
+        <div className="stepper">
+          <div className={`step ${currentStep >= 1 ? 'active' : ''}`}>
+            <div className="circle">1</div>
+            <div className="label">정보 입력</div>
+          </div>
+          <div className={`step ${currentStep >= 2 ? 'active' : ''}`}>
+            <div className="circle">2</div>
+            <div className="label">분석 진행</div>
+          </div>
+          <div className={`step ${currentStep >= 3 ? 'active' : ''}`}>
+            <div className="circle">3</div>
+            <div className="label">결과 확인</div>
+          </div>
+        </div>
+
         {/* 입력 폼 */}
         <div className="card-form">
           <form onSubmit={handleSubmit}>
@@ -150,7 +174,7 @@ function App() {
             {/* 기관 선택 */}
             <div className="form-group">
               <div className="label-container">
-                <FontAwesomeIcon icon={faBuilding} color="#4285f4" />
+                <FontAwesomeIcon icon={faBuilding} color="#6483d1" />
                 <label className="form-label">
                   분석 대상 기관명 <span style={{color: 'red'}}>*</span>
                 </label>
@@ -184,7 +208,7 @@ function App() {
             {/* 월 선택 */}
             <div className="form-group">
               <div className="label-container">
-                <FontAwesomeIcon icon={faCalendarAlt} color="#4285f4" />
+                <FontAwesomeIcon icon={faCalendarAlt} color="#6483d1" />
                 <label className="form-label">월 선택 <span style={{color: 'red'}}>*</span></label>
               </div>
               <div className="input-with-icon">
@@ -200,7 +224,7 @@ function App() {
             {/* 분석 질문 */}
             <div className="form-group">
               <div className="label-container">
-                <FontAwesomeIcon icon={faQuestionCircle} color="#4285f4" />
+                <FontAwesomeIcon icon={faQuestionCircle} color="#6483d1" />
                 <label className="form-label">분석 질문 <span style={{color: 'red'}}>*</span></label>
               </div>
               <textarea
@@ -255,12 +279,13 @@ function App() {
       <div className="saved-empty">아직 저장된 보고서가 없습니다.</div>
     ) : (
       <div className="saved-cards">
-        {savedReports.map(r => (
+        {[...savedReports].reverse().map(r => (
           <div 
             key={r.id} 
-            className="saved-card" 
+            className={`saved-card ${response?.id === r.id ? 'selected' : ''}`} 
             onClick={() => setResponse(r)}
           >
+
             <div className="saved-card-top">
               <div className="saved-left">
                 <div className="saved-organization">{r.organization_name}</div>
@@ -374,7 +399,6 @@ function App() {
     </div>
   </div>
 )}
-
 
       </div>
     </div>
