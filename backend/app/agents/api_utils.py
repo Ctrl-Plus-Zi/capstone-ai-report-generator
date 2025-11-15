@@ -109,9 +109,30 @@ def call_kcisa_api(
         if keyword:
             params["keyword"] = keyword
 
-        # 요청 (타임아웃 증가: connect 10s, read 30s)
-        resp = requests.get(base_url, params=params, timeout=(10, 30))
-        resp.raise_for_status()
+        # 요청 (재시도 로직 포함, 타임아웃: connect 10s, read 30s)
+        retries = 3
+        last_exc = None
+        resp = None
+        for attempt in range(retries):
+            try:
+                resp = requests.get(base_url, params=params, timeout=(10, 30))
+                resp.raise_for_status()
+                break
+            except requests.exceptions.RequestException as e:
+                last_exc = e
+                if attempt < retries - 1:
+                    time.sleep(1.5 ** attempt)  # 1.0s → 1.5s → 2.25s
+                    continue
+        
+        if last_exc:
+            return {
+                "success": False,
+                "api_name": api_name,
+                "error": f"API 호출 실패 (재시도 {retries}회 후): {str(last_exc)}",
+                "data": [],
+                "count": 0,
+                "url": (resp.url if resp else f"{base_url}?<params>")
+            }
 
         # XML 파싱
         root = ET.fromstring(resp.text)
@@ -127,8 +148,14 @@ def call_kcisa_api(
         # 항상 '지역 변수'로 먼저 정의해두면 UnboundLocalError 방지됨
         filter_rules = list(cfg.get("filter_rules") or [])
         
-        # filter_value가 제공되면 동적으로 필터 추가/수정
-        if filter_value:
+        # keyword가 제공되면 서버 사이드 검색이 이미 필터링하므로 하드코딩된 필터 제거
+        # filter_value가 제공되면 기존 filter_rules를 무시하고 새로운 필터만 사용
+        if keyword:
+            # 서버 사이드 검색을 사용하는 경우 하드코딩된 필터 제거
+            filter_rules = []
+        elif filter_value:
+            # filter_value만 제공된 경우 (URL 필터링 등)
+            filter_rules = []  # 기존 하드코딩된 필터 제거
             # 기관명 필터링을 위한 동적 필터 추가
             # CNTC_INSTT_NM 필드가 있으면 기관명으로 필터링
             if any(f in fields for f in ["CNTC_INSTT_NM", "cntc_instt_nm"]):

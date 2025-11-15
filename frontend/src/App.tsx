@@ -2,6 +2,7 @@
 import './App.css'; 
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { marked } from 'marked';
+import { AgeGenderChart } from './AgeGenderChart';
 
 // marked 옵션 설정
 marked.use({
@@ -12,10 +13,30 @@ marked.use({
 import { 
     faBuilding, 
     faQuestionCircle, 
-    faCircleInfo
+    faCircleInfo,
+    faChevronRight,
+    faChevronLeft
 } from '@fortawesome/free-solid-svg-icons'; 
 
 const API_BASE = 'http://localhost:8000';
+
+interface ChartData {
+  age_gender_ratio?: Array<{
+    cri_ym: string;
+    male_20s: number;
+    male_30s: number;
+    male_40s: number;
+    male_50s: number;
+    male_60s: number;
+    male_70s: number;
+    female_20s: number;
+    female_30s: number;
+    female_40s: number;
+    female_50s: number;
+    female_60s: number;
+    female_70s: number;
+  }>;
+}
 
 interface AdvancedReportResponse {
   id: number;
@@ -26,6 +47,7 @@ interface AdvancedReportResponse {
   analysis_summary: string;
   generated_at: string;
   generation_time_seconds: number;
+  chart_data: ChartData;
 }
 
 // 보고서 생성 시간 포맷팅 함수
@@ -44,11 +66,12 @@ function formatGenerationTime(seconds: number): string {
 }
 
 function App() {
-  const [organizationName, setOrganizationName] = useState('');
-  const [userCommand, setUserCommand] = useState('');
-  const [response, setResponse] = useState<AdvancedReportResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [organizationName, setOrganizationName] = useState('');
+  const [userCommand, setUserCommand] = useState('');
+  const [response, setResponse] = useState<AdvancedReportResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [sidebarOpen, setSidebarOpen] = useState(true); // 사이드바 열림/닫힘 상태
 /* 사용자가 생성한 보고서 저장 */
   const [savedReports, setSavedReports] = useState<AdvancedReportResponse[]>(
   JSON.parse(localStorage.getItem("savedReports") || "[]")
@@ -216,8 +239,17 @@ function App() {
           </form>
         </div>
 
+{/* 사이드바 토글 버튼 */}
+<button 
+  className={`sidebar-toggle-button ${sidebarOpen ? 'sidebar-open' : ''}`}
+  onClick={() => setSidebarOpen(!sidebarOpen)}
+  aria-label={sidebarOpen ? "사이드바 닫기" : "사이드바 열기"}
+>
+  <FontAwesomeIcon icon={sidebarOpen ? faChevronRight : faChevronLeft} />
+</button>
+
 {/* 저장된 보고서 목록 사이드바 */}
-<div className="saved-list-sidebar">
+<div className={`saved-list-sidebar ${sidebarOpen ? 'sidebar-open' : 'sidebar-closed'}`}>
   <h3 className="saved-title">최근 생성된 보고서</h3>
 
   {savedReports.length === 0 && (
@@ -271,13 +303,40 @@ function App() {
               <div>
                 <strong>보고서 ID:</strong> {response.id}
               </div>
-            </div>
+            </div>
 
-            {response.research_sources.length > 0 && (
-              <div className="sources-section">
-                <strong className="sources-title">
-                  참고 출처
-                </strong>
+            {/* 차트 데이터 표시 */}
+            <div className="chart-section" style={{ marginBottom: '30px', padding: '20px', backgroundColor: '#f9fafb', borderRadius: '8px' }}>
+              <h3 style={{ marginBottom: '20px', fontSize: '20px', fontWeight: '600' }}>
+                월별 연령대별 성별 비율
+              </h3>
+              {response.chart_data?.age_gender_ratio && response.chart_data.age_gender_ratio.length > 0 ? (
+                response.chart_data.age_gender_ratio.map((data, idx) => (
+                  <AgeGenderChart 
+                    key={idx} 
+                    data={data}
+                  />
+                ))
+              ) : (
+                <div style={{ padding: '20px', textAlign: 'center', color: '#666' }}>
+                  <p>차트 데이터가 없습니다.</p>
+                  <p style={{ fontSize: '12px', marginTop: '10px' }}>
+                    {response.chart_data ? 'chart_data는 있지만 age_gender_ratio가 없습니다.' : 'chart_data가 없습니다.'}
+                  </p>
+                  {process.env.NODE_ENV === 'development' && (
+                    <pre style={{ marginTop: '10px', fontSize: '10px', textAlign: 'left', backgroundColor: '#fff', padding: '10px', borderRadius: '4px', overflow: 'auto' }}>
+                      {JSON.stringify(response.chart_data, null, 2)}
+                    </pre>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {response.research_sources.length > 0 && (
+              <div className="sources-section">
+                <strong className="sources-title">
+                  참고 출처
+                </strong>
                 <ul className="sources-list">
                   {response.research_sources.slice(0, 5).map((source, idx) => (
                     <li key={idx}>

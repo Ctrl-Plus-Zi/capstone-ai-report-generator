@@ -84,6 +84,7 @@ class AgentReportService:
                 "analysis_summary": result.get("analysis_findings", ""),
                 "report_topic": user_command,
                 "generation_time_seconds": generation_time_seconds,
+                "chart_data": result.get("chart_data", {}),  # 차트 데이터 추가
             }
             
         except Exception as e:

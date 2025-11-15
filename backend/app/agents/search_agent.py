@@ -77,7 +77,8 @@ def create_search_agent(llm, toolkit):
             toolkit.search_exhibition_info_api,
             toolkit.search_museum_collection_api,
             toolkit.search_weather_daily_api,
-            toolkit.search_performance_info_api, 
+            toolkit.search_performance_info_api,
+            toolkit.get_monthly_age_gender_ratio_data,  # 월별 연령대별 성별 비율 데이터 조회
             toolkit.search_internal_documents,
             toolkit.fetch_data_snapshot,
         ]
@@ -117,6 +118,10 @@ def create_search_agent(llm, toolkit):
         if toolkit.search_weather_daily_api not in tools:
             tools.append(toolkit.search_weather_daily_api)
         
+        # 연령대별 성별 비율 데이터 조회 도구는 모든 기관에서 사용 가능
+        if toolkit.get_monthly_age_gender_ratio_data not in tools:
+            tools.append(toolkit.get_monthly_age_gender_ratio_data)
+        
         # 날짜 필터링 변수 (함수 전체에서 사용)
         current_date = request_context.get("current_date", "")
         filter_active = request_context.get("filter_active_only", False)
@@ -148,23 +153,33 @@ def create_search_agent(llm, toolkit):
             - 국립현대미술관: search_exhibition_info_api만 사용 (전시 정보)
             - 예술의전당: search_performance_info_api만 사용 (공연 정보)
             - 날씨 데이터가 필요한 경우에만 search_weather_daily_api 사용 (모든 기관 공통)
+            - get_monthly_age_gender_ratio_data: 모든 기관에서 사용 가능 (월별 연령대별 성별 비율 데이터)
             
             # 수집 전략
             1. 요청 컨텍스트의 organization_name(기관명)을 파악하세요
             2. 위의 기관별 API 사용 규칙을 반드시 준수하세요. 해당 기관에 맞지 않는 API는 호출하지 마세요.
             3. report_topic(보고서 주제)과 questions(질문 목록)을 분석하세요
-            4. 요청 컨텍스트에 current_date(현재 날짜)가 있으면, 현재 진행 중인 공연/전시만 필터링하세요
+            4. 질문에 "2025년 1월", "2025 1월", "2025-01" 같은 날짜가 포함되어 있으면:
+               - 반드시 get_monthly_age_gender_ratio_data를 호출하여 해당 월의 연령대별 성별 비율 데이터를 조회하세요
+               - 예: "2025 1월"이면 organization_name="{organization_name}", year=2025, month=1로 호출
+               - 날짜가 없어도 연령대별 성별 비율 데이터가 필요하면 전체 기간 데이터를 조회하세요
+               - 이 도구는 모든 기관에서 사용 가능합니다 (국립현대미술관, 예술의전당, 국립중앙박물관 모두)
+            5. 요청 컨텍스트에 current_date(현재 날짜)가 있으면, 현재 진행 중인 공연/전시만 필터링하세요
                - filter_active_only가 True인 경우, 오늘 날짜({current_date}) 기준으로 진행 중인 것만 수집
                - PERIOD 또는 EVENT_PERIOD 필드를 확인하여 오늘 날짜가 기간 내에 있는지 검증
                - 과거 공연/전시나 미래 예정 공연은 제외하고 현재 진행 중인 것만 포함
-            5. 검색 키워드는 organization_name과 questions에서 추출하세요
-            6. 불필요한 대량 호출/중복 호출 금지
+            6. 검색 키워드는 organization_name과 questions에서 추출하세요
+            7. 불필요한 대량 호출/중복 호출 금지
             
             # 도구 호출 가이드
-            - search_exhibition_info_api: keyword에 기관의 웹사이트 URL 패턴 사용 (예: "www.museum.go.kr")
+            - search_exhibition_info_api: keyword에 기관명 사용 (예: "국립현대미술관", "국립중앙박물관")
             - search_museum_collection_api: keyword에 주제 관련 키워드 사용 (예: "청자", "불상", "조선시대")
             - search_weather_daily_api: request_context.weather_params(year, month, stn_ids, num_of_rows)을 우선 사용.
             - search_performance_info_api: keyword에 공연 기관명 또는 공연명 사용 (예: "예술의전당", "세종문화회관", "라트라비아타")
+            - get_monthly_age_gender_ratio_data: AWS RDS에서 월별 남성/여성 연령대 비율 데이터 조회
+              * 질문에 "2025년 1월", "2025 1월", "2025-01" 같은 날짜가 포함되어 있으면 해당 월의 데이터를 조회하세요
+              * 예: organization_name="국립현대미술관", year=2025, month=1
+              * 날짜가 없으면 전체 기간 데이터를 조회하세요 (year=None, month=None)
             - 각 도구는 num_of_rows 파라미터로 조회할 데이터 개수 조정 가능 (기본: 50개)
             
             # 실행 지침
@@ -225,6 +240,8 @@ def create_search_agent(llm, toolkit):
         research_notes = state.get("research_notes")
         research_sources = list(state.get("research_sources", []))
         research_payload = list(state.get("research_payload", []))
+        chart_data = state.get("chart_data", {})
+        latest_performance_image = state.get("latest_performance_image", "")
 
         org = (request_context.get("organization_name") or "").strip()
         weather_params = request_context.get("weather_params") or state.get("weather_params") or {}
@@ -288,6 +305,58 @@ def create_search_agent(llm, toolkit):
                     sources = tool_result.get("sources")
                     research_sources.extend(sources)
                     data = tool_result.get("data") or []
+                    
+                    # 차트 데이터 추출 (월별 연령대별 성별 비율 등)
+                    if "chart_data" in tool_result and tool_result["chart_data"]:
+                        tool_name_attr = getattr(toolkit.get_monthly_age_gender_ratio_data, "name", "get_monthly_age_gender_ratio_data")
+                        if tool_name == tool_name_attr:
+                            chart_data["age_gender_ratio"] = tool_result["chart_data"]
+                    
+                    # 공연 정보 또는 전시 정보인 경우 가장 최근 이미지 추출
+                    if tool_name in {
+                        getattr(toolkit.search_performance_info_api, "name", "search_performance_info_api"),
+                        getattr(toolkit.search_exhibition_info_api, "name", "search_exhibition_info_api"),
+                    } and data:
+                        def extract_date_from_period(period_str):
+                            """PERIOD 또는 EVENT_PERIOD에서 종료 날짜 추출"""
+                            if not period_str:
+                                return None
+                            try:
+                                # 다양한 구분자 처리: "~", " - ", "-"
+                                for sep in ["~", " - ", "-"]:
+                                    if sep in period_str:
+                                        parts = period_str.split(sep, 1)
+                                        if len(parts) == 2:
+                                            end_str = parts[1].strip().replace(".", "-").replace("/", "-")
+                                            # 날짜 형식 정규화
+                                            end_str = re.sub(r'(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})', r'\1-\2-\3', end_str)
+                                            # 월/일이 한 자리 수인 경우 0 패딩
+                                            end_parts = end_str.split("-")
+                                            if len(end_parts) == 3:
+                                                end_str = f"{end_parts[0]}-{end_parts[1].zfill(2)}-{end_parts[2].zfill(2)}"
+                                            try:
+                                                return datetime.strptime(end_str, "%Y-%m-%d")
+                                            except:
+                                                continue
+                            except:
+                                pass
+                            return None
+                        
+                        # 이미지가 있는 공연 중 가장 최근 종료일을 가진 공연 찾기
+                        performance_with_images = []
+                        for item in data:
+                            image_url = item.get("IMAGE_OBJECT") or item.get("image_object") or item.get("IMAGE") or item.get("image")
+                            if image_url:
+                                period = item.get("PERIOD") or item.get("EVENT_PERIOD") or item.get("period") or item.get("event_period")
+                                end_date = extract_date_from_period(period)
+                                if end_date:
+                                    performance_with_images.append((end_date, image_url, item.get("TITLE") or item.get("title", "")))
+                        
+                        if performance_with_images:
+                            # 종료일 기준으로 내림차순 정렬 (가장 최근이 첫 번째)
+                            performance_with_images.sort(key=lambda x: x[0], reverse=True)
+                            latest_performance_image = performance_with_images[0][1]
+                    
                     if data:
                         research_payload.append({
                             "tool": tool_name,
@@ -317,6 +386,44 @@ def create_search_agent(llm, toolkit):
                                 research_notes = f"{research_notes}\n{entry}".strip() if research_notes else entry
                             research_sources.extend(perf_res.get("sources") or [])
                             data = perf_res.get("data") or []
+                            
+                            # 공연 정보 또는 전시 정보인 경우 가장 최근 이미지 추출
+                            if data and not latest_performance_image:
+                                def extract_date_from_period(period_str):
+                                    """PERIOD 또는 EVENT_PERIOD에서 종료 날짜 추출"""
+                                    if not period_str:
+                                        return None
+                                    try:
+                                        for sep in ["~", " - ", "-"]:
+                                            if sep in period_str:
+                                                parts = period_str.split(sep, 1)
+                                                if len(parts) == 2:
+                                                    end_str = parts[1].strip().replace(".", "-").replace("/", "-")
+                                                    end_str = re.sub(r'(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})', r'\1-\2-\3', end_str)
+                                                    end_parts = end_str.split("-")
+                                                    if len(end_parts) == 3:
+                                                        end_str = f"{end_parts[0]}-{end_parts[1].zfill(2)}-{end_parts[2].zfill(2)}"
+                                                    try:
+                                                        return datetime.strptime(end_str, "%Y-%m-%d")
+                                                    except:
+                                                        continue
+                                    except:
+                                        pass
+                                    return None
+                                
+                                performance_with_images = []
+                                for item in data:
+                                    image_url = item.get("IMAGE_OBJECT") or item.get("image_object") or item.get("IMAGE") or item.get("image")
+                                    if image_url:
+                                        period = item.get("PERIOD") or item.get("EVENT_PERIOD") or item.get("period") or item.get("event_period")
+                                        end_date = extract_date_from_period(period)
+                                        if end_date:
+                                            performance_with_images.append((end_date, image_url, item.get("TITLE") or item.get("title", "")))
+                                
+                                if performance_with_images:
+                                    performance_with_images.sort(key=lambda x: x[0], reverse=True)
+                                    latest_performance_image = performance_with_images[0][1]
+                            
                             if data:
                                 research_payload.append({
                                     "tool": getattr(toolkit.search_performance_info_api, "name", "search_performance_info_api"),
@@ -361,6 +468,8 @@ def create_search_agent(llm, toolkit):
             "research_notes": research_notes,
             "research_sources": research_sources,
             "research_payload": research_payload,
+            "latest_performance_image": latest_performance_image,
+            "chart_data": chart_data,
         }
 
     return search_agent_node

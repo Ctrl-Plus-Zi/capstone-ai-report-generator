@@ -17,6 +17,7 @@ class AdvancedReportResponse(BaseModel):
     analysis_summary: str
     generated_at: datetime
     generation_time_seconds: float = 0.0  # 보고서 생성 소요 시간 (초)
+    chart_data: dict = {}  # 차트 데이터 (월별 연령대별 성별 비율 등)
 
     class Config:
         from_attributes = True

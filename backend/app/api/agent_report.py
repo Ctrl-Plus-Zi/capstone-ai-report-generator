@@ -46,7 +46,8 @@ async def generate_advanced_report(
             research_sources=json.loads(advanced_report.research_sources_json) if advanced_report.research_sources_json else [],
             analysis_summary=advanced_report.analysis_summary or "",
             generated_at=advanced_report.created_at,
-            generation_time_seconds=result.get("generation_time_seconds", 0.0)
+            generation_time_seconds=result.get("generation_time_seconds", 0.0),
+            chart_data=result.get("chart_data", {})  # 차트 데이터 추가
         )
         
     except Exception as e:

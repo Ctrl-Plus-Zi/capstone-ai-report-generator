@@ -1,8 +1,9 @@
 from __future__ import annotations
 from langchain_core.tools import tool
-from typing import Annotated, Any
+from typing import Annotated, Any, Optional
 
 from .api_utils import call_kcisa_api, call_kma_asos_daily_api, month_range
+from .stellarcube_utils import get_monthly_age_gender_ratio
 
 
 class ReportingTools:
@@ -10,13 +11,23 @@ class ReportingTools:
     @staticmethod
     @tool
     def search_exhibition_info_api(
-        keyword: Annotated[str, "전시 정보를 검색할 키워드 (예: www.museum.go.kr)"] = "www.museum.go.kr",
+        keyword: Annotated[str, "전시 정보를 검색할 키워드 (기관명 사용, 예: 국립현대미술관, 국립중앙박물관)"] = "국립현대미술관",
         num_of_rows: Annotated[int, "조회할 데이터 행 수"] = 50
     ):
         """한국문화정보원 전시정보 통합 API (KCISA_CCA_145)를 검색합니다. 문화시설의 전시 정보, 이벤트, 프로그램 등을 조회합니다."""
+        # keyword가 URL 패턴인 경우 기관명으로 변환 시도
+        filter_value = None
+        if keyword and ("www." in keyword or ".go.kr" in keyword or ".kr" in keyword):
+            # URL 패턴인 경우, filter_value로만 사용 (서버 사이드 검색은 하지 않음)
+            filter_value = keyword
+            keyword = None
+        # 기관명인 경우 keyword로만 서버 사이드 검색 사용 (filter_value는 사용하지 않음)
+        # 서버 사이드 검색이 이미 기관명으로 필터링하므로 중복 필터링 불필요
+        
         result = call_kcisa_api(
             api_name="KCISA_CCA_145",
-            filter_value=keyword,
+            keyword=keyword,  # 서버 사이드 검색 파라미터 (기관명인 경우만)
+            filter_value=filter_value,  # 클라이언트 사이드 필터링 (URL인 경우만)
             num_of_rows=num_of_rows,
             filter_remove_fields=False  # DESCRIPTION 포함
         )
@@ -117,6 +128,10 @@ class ReportingTools:
         fields 예: TITLE, DESCRIPTION, IMAGE_OBJECT, LOCAL_ID, EVENT_SITE, GENRE, DURATION,
                   AUTHOR, ACTOR, CONTRIBUTOR, AUDIENCE, CHARGE, PERIOD, EVENT_PERIOD
         """
+        # 예술의전당인 경우 컨텍스트 길이 초과 방지를 위해 10개로 제한
+        if keyword and ("예술의전당" in keyword or "예술의 전당" in keyword):
+            num_of_rows = min(num_of_rows, 10)
+        
         result = call_kcisa_api(
             api_name="KCISA_CCA_144",
             keyword=keyword,     # filter_rules[0].value(CNTC_INSTT_NM)로도 필터링 됨
@@ -164,3 +179,43 @@ class ReportingTools:
             return {"notes": f"{result['api_description']} {year}년 {month}월 조회 완료: 총 {result['count']}개의 일자료.", "sources": [], "data": result["data"]}
         else:
             return {"notes": f"날씨 데이터 조회 실패: {result.get('error', '알 수 없는 오류')}", "sources": [], "data": []}
+
+    @staticmethod
+    @tool
+    def get_monthly_age_gender_ratio_data(
+        organization_name: Annotated[str, "기관명 (예: 국립현대미술관, 국립중앙박물관, 예술의전당)"] = "국립현대미술관",
+        year: Annotated[Optional[int], "조회할 연도 (None이면 전체)"] = None,
+        month: Annotated[Optional[int], "조회할 월 (None이면 전체)"] = None
+    ):
+        """
+        AWS RDS 데이터베이스에서 월별 남성/여성 연령대 비율 데이터를 조회합니다.
+        기관별 방문자의 연령대별 성별 비율을 월별로 집계하여 반환합니다.
+        
+        지원 기관:
+        - 국립현대미술관 → 국립현대미술관서울관 데이터 조회
+        - 국립중앙박물관 → 국립중앙박물관 데이터 조회
+        - 예술의전당 → 예술의전당한가람미술관 데이터 조회
+        """
+        result = get_monthly_age_gender_ratio(organization_name, year, month)
+        
+        if result["success"]:
+            notes = f"{result['organization_name']} 월별 연령대별 성별 비율 데이터 조회 완료: 총 {result['count']}개월 데이터"
+            if year:
+                notes += f" ({year}년"
+                if month:
+                    notes += f" {month}월"
+                notes += ")"
+            
+            return {
+                "notes": notes,
+                "sources": [],
+                "data": result["data"],
+                "chart_data": result["data"]  # 차트용 데이터 별도 포함
+            }
+        else:
+            return {
+                "notes": f"월별 연령대별 성별 비율 데이터 조회 실패: {result.get('error', '알 수 없는 오류')}",
+                "sources": [],
+                "data": [],
+                "chart_data": []
+            }

@@ -12,6 +12,7 @@ def create_final_report_compose_agent(llm):
         analysis_outline = state.get("analysis_outline", "")
         analysis_findings = state.get("analysis_findings", "")
         research_notes = state.get("research_notes", "")
+        latest_performance_image = state.get("latest_performance_image", "")
         messages: List = list(state.get("messages", []))
 
         prompt = textwrap.dedent(
@@ -34,6 +35,8 @@ def create_final_report_compose_agent(llm):
             
             조사 메모:
             {research_notes}
+            
+            {image_section}
             
             # 보고서 구조 (Markdown 형식)
             
@@ -73,6 +76,7 @@ def create_final_report_compose_agent(llm):
             - 필요시 표나 리스트로 정보 정리
             - 한국어로 작성 (전문적이고 격식 있는 문체)
             - **중요**: 마크다운 코드 블록(```markdown 또는 ```)으로 감싸지 말고, 바로 마크다운 형식으로 작성하세요
+            {image_instruction}
             
             # 주의사항
             - 수집된 데이터를 최대한 활용하되, 없는 내용은 억지로 만들지 말 것
@@ -84,12 +88,41 @@ def create_final_report_compose_agent(llm):
             위 구조와 원칙을 따라 완성도 높은 Markdown 보고서를 작성하세요. 
             보고서는 # 제목으로 바로 시작하고, 코드 블록 마커(```)를 사용하지 마세요.
             """
-        ).format(
+        )
+        
+        # 이미지 섹션 구성
+        if latest_performance_image:
+            # 기관명에 따라 이미지 설명 변경
+            org_name = request_context.get("organization_name", "")
+            if "예술의전당" in org_name or "예술의 전당" in org_name:
+                image_label = "가장 최근 공연"
+            elif "국립현대미술관" in org_name or "미술관" in org_name:
+                image_label = "가장 최근 전시"
+            else:
+                image_label = "가장 최근 이미지"
+            
+            image_section = f"""
+            # {image_label} 이미지
+            가장 최근 {image_label} 이미지 URL: {latest_performance_image}
+            """
+            image_instruction = f"""
+            - **{image_label} 이미지 포함**: 위에 제공된 가장 최근 {image_label} 이미지 URL을 보고서에 포함하세요.
+            - 이미지는 Executive Summary 섹션 바로 아래에 HTML 형식으로 추가하세요: <img src="이미지URL" alt="{image_label}" style="max-width: 100%; height: auto;" />
+            - 이미지가 보고서 가로폭을 넘지 않도록 max-width: 100% 스타일을 반드시 적용하세요.
+            - 이미지가 보고서의 시각적 효과를 높이므로 반드시 포함하세요.
+            """
+        else:
+            image_section = ""
+            image_instruction = ""
+        
+        prompt = prompt.format(
             request_context=json.dumps(request_context, ensure_ascii=False, indent=2),
             report_topic=request_context.get("report_topic", "보고서 주제"),
             analysis_outline=analysis_outline,
             analysis_findings=analysis_findings,
             research_notes=research_notes,
+            image_section=image_section,
+            image_instruction=image_instruction,
         ).strip()
 
         response = llm.invoke(prompt)
