@@ -1,0 +1,103 @@
+# OS artifacts
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Python / FastAPI
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+.eggs/
+.env
+.env.local
+.env.development
+.env.production
+.env.*
+.venv/
+venv/
+env/
+instance/
+build/
+dist/
+pip-wheel-metadata/
+.mypy_cache/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+.cache/
+
+# Logs
+*.log
+logs/
+
+# Node / React
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.temp/
+.tmp/
+dist-*/
+.eslintcache
+.next/
+*.tsbuildinfo
+
+# Frontend build outputs
+build/
+public/build/
+public/dist/
+
+# IDE & tooling
+.idea/
+.vscode/
+*.code-workspace
+
+# Data & secrets
+secrets/
+*.sqlite3
+*.db
+/data/
+/tmp/
+
+# Database
+*.sql
+*.dump
+*.backup
+postgres_data/
+
+# Project specific
+/backend/migrations/versions/*
+!/backend/migrations/versions/.gitkeep
+
+# Documentation & references
+docs/
+references/
+
+# Temporary files
+__temp_*.py
+*.swp
+*.swo
+*~
+
+# Large files / folders to exclude
+2025-09-30-stellarcube/
+
+# Open API 
+api_configs.json 
+
+# Vite build output
+frontend/dist/
+frontend/.vite/
+
+# Test results
+**/test_result.json
+**/*_test_result.json
+
+# Refer folder (레퍼런스 폴더)
+refer/
+
+# Tool folder (백엔드 툴 폴더)
+backend/tool/
