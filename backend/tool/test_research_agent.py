@@ -147,9 +147,19 @@ class DebugReportingTools(ReportingTools):
         from app.agents.api_utils import call_kcisa_api
         # 전역 변수에서 include_description 가져오기
         global include_description
+        # keyword가 URL 패턴인 경우 기관명으로 변환 시도
+        filter_value = None
+        if keyword and ("www." in keyword or ".go.kr" in keyword or ".kr" in keyword):
+            # URL 패턴인 경우, filter_value로만 사용 (서버 사이드 검색은 하지 않음)
+            filter_value = keyword
+            keyword = None
+        # 기관명인 경우 keyword로만 서버 사이드 검색 사용 (filter_value는 사용하지 않음)
+        # 서버 사이드 검색이 이미 기관명으로 필터링하므로 중복 필터링 불필요
+        
         api_result = call_kcisa_api(
             api_name="KCISA_CCA_145",
-            filter_value=keyword,
+            keyword=keyword,  # 서버 사이드 검색 파라미터 (기관명인 경우만)
+            filter_value=filter_value,  # 클라이언트 사이드 필터링 (URL인 경우만)
             num_of_rows=num_of_rows,
             filter_remove_fields=not include_description
         )
@@ -224,7 +234,12 @@ class DebugReportingTools(ReportingTools):
         print("\n" + "="*80)
         print("🔍 [도구 호출] search_performance_info_api")
         print(f"   키워드: {keyword}")
-        print(f"   행 수: {num_of_rows}")
+        # 예술의전당인 경우 10개로 제한
+        if "예술의전당" in keyword or "예술의 전당" in keyword:
+            num_of_rows = min(num_of_rows, 10)
+            print(f"   행 수: {num_of_rows} (예술의전당이므로 최대 10개로 제한)")
+        else:
+            print(f"   행 수: {num_of_rows}")
         print("="*80)
         # 원본 함수의 실제 구현을 직접 호출 (콜백 충돌 방지)
         from app.agents.api_utils import call_kcisa_api
