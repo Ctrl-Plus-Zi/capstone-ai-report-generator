@@ -86,9 +86,6 @@ __temp_*.py
 # Large files / folders to exclude
 2025-09-30-stellarcube/
 
-# Open API 
-api_configs.json 
-
 # Vite build output
 frontend/dist/
 frontend/.vite/
