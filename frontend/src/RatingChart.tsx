@@ -157,7 +157,7 @@ export const RatingChart: React.FC<RatingChartProps> = ({ statistics, organizati
   };
 
   return (
-    <div style={{ width: '100%', height: '100px', marginTop: '20px', padding: '10px 0' }}>
+    <div style={{ width: '100%', height: '200px', marginTop: '20px', padding: '10px 0' }}>
       <Bar data={chartData} options={options} />
     </div>
   );
