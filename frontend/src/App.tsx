@@ -3,6 +3,7 @@ import './App.css';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { marked } from 'marked';
 import { AgeGenderChart } from './AgeGenderChart';
+import { RatingChart } from './RatingChart';
 
 // marked 옵션 설정
 marked.use({
@@ -15,7 +16,9 @@ import {
     faQuestionCircle, 
     faCircleInfo,
     faChevronRight,
-    faChevronLeft
+    faChevronLeft,
+    faCalendarAlt,
+    faFileCode
 } from '@fortawesome/free-solid-svg-icons'; 
 
 const API_BASE = 'http://localhost:8000';
@@ -38,6 +41,25 @@ interface ChartData {
   }>;
 }
 
+interface RatingStatistics {
+  total_reviews: number;
+  average_rating: number;
+  rating_distribution: {
+    "5": number;
+    "4": number;
+    "3": number;
+    "2": number;
+    "1": number;
+  };
+  rating_percentages: {
+    "5": number;
+    "4": number;
+    "3": number;
+    "2": number;
+    "1": number;
+  };
+}
+
 interface AdvancedReportResponse {
   id: number;
   organization_name: string;
@@ -48,6 +70,7 @@ interface AdvancedReportResponse {
   generated_at: string;
   generation_time_seconds: number;
   chart_data: ChartData;
+  rating_statistics?: RatingStatistics;
 }
 
 // 보고서 생성 시간 포맷팅 함수
@@ -65,33 +88,83 @@ function formatGenerationTime(seconds: number): string {
   }
 }
 
+const ORG_LIST = [
+  "국립중앙박물관", 
+  "국립현대미술관", 
+  "대한민국역사박물관",
+  "서울역사박물관", 
+  "전쟁기념관", 
+  "서울시립과학관",
+  "서울시립미술관", 
+  "예술의전당"
+];
+
 function App() {
   const [organizationName, setOrganizationName] = useState('');
   const [userCommand, setUserCommand] = useState('');
+  const [selectedMonth, setSelectedMonth] = useState('');
+  const [reportType, setReportType] = useState<'user' | 'operator'>('user');
   const [response, setResponse] = useState<AdvancedReportResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [sidebarOpen, setSidebarOpen] = useState(true); // 사이드바 열림/닫힘 상태
+  const [savedOpen, setSavedOpen] = useState(true); // 사이드바 열림/닫힘 상태
 /* 사용자가 생성한 보고서 저장 */
   const [savedReports, setSavedReports] = useState<AdvancedReportResponse[]>(
   JSON.parse(localStorage.getItem("savedReports") || "[]")
 );
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-    setResponse(null);
+  /** -----------------------------
+   * HTML 파일 다운로드
+   * ---------------------------- */
+  const downloadReportHTML = (reportHtml: string, fileName: string) => {
+    const blob = new Blob([reportHtml], { type: "text/html;charset=utf-8" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = fileName.replace(/\.pdf$/, ".html");
+    link.click();
+    URL.revokeObjectURL(link.href);
+  };
 
-    try {
-      const res = await fetch(`${API_BASE}/report/advanced`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          organization_name: organizationName,
-          user_command: userCommand
-        })
-      });
+  const handleDeleteReport = (id: number) => {
+    const updated = savedReports.filter(report => report.id !== id);
+    setSavedReports(updated);
+    localStorage.setItem("savedReports", JSON.stringify(updated));
+    if (response?.id === id) setResponse(null);
+  };
+
+  // 월 선택값을 "2025년 1월" 형식으로 변환
+  const formatMonthForQuery = (monthValue: string): string => {
+    if (!monthValue) return '';
+    const [year, month] = monthValue.split('-');
+    return `${year}년 ${parseInt(month)}월`;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    setResponse(null);
+
+    // 선택값을 질문에 포함
+    let finalCommand = userCommand;
+    if (organizationName) {
+      finalCommand = `${organizationName}, ${finalCommand}`;
+    }
+    if (selectedMonth) {
+      const monthText = formatMonthForQuery(selectedMonth);
+      finalCommand = `${finalCommand} (분석 기간: ${monthText})`;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/report/advanced`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          organization_name: organizationName,
+          user_command: finalCommand,
+          report_type: reportType
+        })
+      });
 
       if (res.ok) {
         const result = await res.json();
@@ -174,27 +247,89 @@ function App() {
         <div className="card-form">
           <form onSubmit={handleSubmit}>
             
-            {/* 분석 대상 기관명 필드 */}
-            <div className="form-group">
+            {/* 기관 선택 */}
+            <div className="form-group">
               <div className="label-container">
                 <FontAwesomeIcon icon={faBuilding} color="#4285f4" />
                 <label className="form-label">
                   분석 대상 기관명 <span style={{color: 'red'}}>*</span>
                 </label>
               </div>
-              <input
-                type="text"
-                value={organizationName}
-                onChange={(e) => setOrganizationName(e.target.value)}
-                placeholder="예: 국립중앙박물관, 윤동주문학관, 서울시립미술관"
-                required={true}
-                className="form-input"
-              />
+              <div className="org-button-group">
+                {ORG_LIST.map(org => (
+                  <button
+                    key={org}
+                    type="button"
+                    className={`org-select-button ${organizationName === org ? "selected" : ""}`}
+                    onClick={() => setOrganizationName(org)}
+                  >
+                    {org}
+                  </button>
+                ))}
+              </div>
+              <input
+                type="text"
+                className="form-input"
+                placeholder="선택 (직접 입력)"
+                value={organizationName}
+                onChange={e => setOrganizationName(e.target.value)}
+                style={{ marginTop: "8px" }}
+                required
+              />
               <div className="guidance-text">
                 <FontAwesomeIcon icon={faCircleInfo} className="icon" />
                 정확한 기관명을 입력하면 더 정밀한 분석이 가능합니다
               </div>
-            </div>
+            </div>
+
+            {/* 월 선택 */}
+            <div className="form-group">
+              <div className="label-container">
+                <FontAwesomeIcon icon={faCalendarAlt} color="#4285f4" />
+                <label className="form-label">월 선택 <span style={{color: 'red'}}>*</span></label>
+              </div>
+              <div className="input-with-icon">
+                <input
+                  type="month"
+                  className="form-input"
+                  value={selectedMonth}
+                  onChange={e => setSelectedMonth(e.target.value)}
+                  required
+                />
+              </div>
+            </div>
+
+            {/* 보고서 타입 선택 (사용자/운영자) */}
+            <div className="form-group">
+              <div className="label-container">
+                <FontAwesomeIcon icon={faCircleInfo} color="#4285f4" />
+                <label className="form-label">보고서 유형 <span style={{color: 'red'}}>*</span></label>
+              </div>
+              <div className="report-type-toggle">
+                <button
+                  type="button"
+                  className={`toggle-option ${reportType === 'user' ? 'active' : ''}`}
+                  onClick={() => setReportType('user')}
+                >
+                  <span className="toggle-label">사용자</span>
+                  <span className="toggle-description">기관 이용자를 위한 정보 제공</span>
+                </button>
+                <button
+                  type="button"
+                  className={`toggle-option ${reportType === 'operator' ? 'active' : ''}`}
+                  onClick={() => setReportType('operator')}
+                >
+                  <span className="toggle-label">운영자</span>
+                  <span className="toggle-description">운영 인사이트 및 의사결정 지원</span>
+                </button>
+              </div>
+              <div className="guidance-text">
+                <FontAwesomeIcon icon={faCircleInfo} className="icon" />
+                {reportType === 'user' 
+                  ? '일반 이용자에게 유용한 정보와 서비스 안내 중심의 보고서를 생성합니다'
+                  : '운영진을 위한 데이터 분석, 인사이트, 전략 제안 중심의 보고서를 생성합니다'}
+              </div>
+            </div>
 
             {/* 분석 질문 필드 */}
             <div className="form-group">
@@ -239,50 +374,101 @@ function App() {
           </form>
         </div>
 
-{/* 사이드바 토글 버튼 */}
-<button 
-  className={`sidebar-toggle-button ${sidebarOpen ? 'sidebar-open' : ''}`}
-  onClick={() => setSidebarOpen(!sidebarOpen)}
-  aria-label={sidebarOpen ? "사이드바 닫기" : "사이드바 열기"}
->
-  <FontAwesomeIcon icon={sidebarOpen ? faChevronRight : faChevronLeft} />
-</button>
+        {/* 최근 생성된 보고서 사이드바 */}
+        <div className={`saved-list-sidebar ${savedOpen ? '' : 'closed'}`}>
+          {/* 사이드바 상단 토글 버튼 */}
+          <button 
+            className="saved-toggle-btn"
+            onClick={() => setSavedOpen(!savedOpen)}
+          >
+            {savedOpen ? '▶' : '◀'}
+          </button>
 
-{/* 저장된 보고서 목록 사이드바 */}
-<div className={`saved-list-sidebar ${sidebarOpen ? 'sidebar-open' : 'sidebar-closed'}`}>
-  <h3 className="saved-title">최근 생성된 보고서</h3>
+          <div className="saved-content">
+            <h3 className="saved-title">최근 생성된 보고서</h3>
 
-  {savedReports.length === 0 && (
-    <div className="saved-empty">아직 저장된 보고서가 없습니다.</div>
-  )}
+            {savedReports.length === 0 ? (
+              <div className="saved-empty">아직 저장된 보고서가 없습니다.</div>
+            ) : (
+              <div className="saved-cards">
+                {savedReports.map(r => {
+                  // 각 보고서의 HTML 변환 헬퍼 함수
+                  const getReportHtml = (report: string) => {
+                    if (!report) return '<p>보고서 내용이 없습니다.</p>';
+                    try {
+                      let markdownText = report.trim();
+                      if (markdownText.startsWith('```')) {
+                        const lines = markdownText.split('\n');
+                        if (lines[0].startsWith('```')) lines.shift();
+                        if (lines[lines.length - 1].trim() === '```') lines.pop();
+                        markdownText = lines.join('\n').trim();
+                      }
+                      return marked.parse(markdownText) as string;
+                    } catch {
+                      return report.replace(/\n/g, '<br/>');
+                    }
+                  };
 
-  {savedReports.map((r) => (
-    <div 
-      key={r.id} 
-      className="saved-card"
-      onClick={() => setResponse(r)}
-    >
-      <div className="saved-card-top">
-        <div className="saved-left">
-          <div className="saved-organization">{r.organization_name}</div>
-          <div className="saved-topic">{r.report_topic}</div>
+                  return (
+                    <div 
+                      key={r.id} 
+                      className="saved-card" 
+                      onClick={() => setResponse(r)}
+                    >
+                      <div className="saved-card-top">
+                        <div className="saved-left">
+                          <div className="saved-organization">{r.organization_name}</div>
+                          <div className="saved-topic">{r.report_topic}</div>
+                        </div>
+                        <span className="saved-status">완료</span>
+                        <button
+                          className="saved-delete-btn"
+                          onClick={e => {
+                            e.stopPropagation();
+                            handleDeleteReport(r.id);
+                          }}
+                        >
+                          삭제
+                        </button>
+                      </div>
+
+                      <div className="saved-card-bottom">
+                        <span className="saved-date">
+                          {new Date(r.generated_at).toLocaleDateString("ko-KR")}
+                        </span>
+                        <div className="saved-tag-actions">
+                          <span className="saved-tag">종합 분석</span>
+                          <button
+                            className="download-btn"
+                            onClick={e => {
+                              e.stopPropagation();
+                              const reportHtml = getReportHtml(r.final_report);
+                              downloadReportHTML(reportHtml, `${r.organization_name}_분석보고서.html`);
+                            }}
+                          >
+                            <FontAwesomeIcon icon={faFileCode} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
-        <span className="saved-status">완료</span>
-      </div>
 
+        {/* 사이드바 열기/닫기 버튼 (사이드바가 닫혔을 때 표시) */}
+        {!savedOpen && (
+          <button 
+            className="saved-toggle-btn-external"
+            onClick={() => setSavedOpen(!savedOpen)}
+          >
+            ▶
+          </button>
+        )}
 
-      <div className="saved-card-bottom">
-        <span className="saved-date">
-          {new Date(r.generated_at).toLocaleDateString('ko-KR')}
-        </span>
-        <span className="saved-tag">종합 분석</span>
-      </div>
-    </div>
-  ))}
-</div>
-
-
-        {/* 오류 메시지 */}
+        {/* 오류 메시지 */}
         {error && (
           <div className="error-message">
             {error}
@@ -354,17 +540,42 @@ function App() {
               </div>
             )}
 
-            {response.analysis_summary && (
-              <div className="analysis-summary">
-                <strong className="analysis-title">
-                  분석 요약
-                </strong>
+            {response.analysis_summary && (
+              <div className="analysis-summary">
+                <strong className="analysis-title">
+                  분석 요약
+                </strong>
                 <div 
                   className="analysis-content"
                   dangerouslySetInnerHTML={{ __html: analysisSummaryHtml }}
                 />
-              </div>
-            )}
+              </div>
+            )}
+
+            {/* 평점 차트 */}
+            <div className="rating-chart-section" style={{ marginBottom: '30px', padding: '20px', backgroundColor: '#f9fafb', borderRadius: '8px' }}>
+              <h3 style={{ marginBottom: '20px', fontSize: '20px', fontWeight: '600' }}>
+                리뷰 평점 분포
+              </h3>
+              {response.rating_statistics && response.rating_statistics.total_reviews > 0 ? (
+                <RatingChart 
+                  statistics={response.rating_statistics} 
+                  organizationName={response.organization_name}
+                />
+              ) : (
+                <div style={{ padding: '20px', textAlign: 'center', color: '#666' }}>
+                  <p>평점 통계 데이터가 없습니다.</p>
+                  <p style={{ fontSize: '12px', marginTop: '10px' }}>
+                    {response.rating_statistics ? '평점 통계는 있지만 리뷰가 없습니다.' : '평점 통계 데이터가 수집되지 않았습니다.'}
+                  </p>
+                  {process.env.NODE_ENV === 'development' && (
+                    <pre style={{ marginTop: '10px', fontSize: '10px', textAlign: 'left', backgroundColor: '#fff', padding: '10px', borderRadius: '4px', overflow: 'auto' }}>
+                      {JSON.stringify(response.rating_statistics, null, 2)}
+                    </pre>
+                  )}
+                </div>
+              )}
+            </div>
 
             <div className="final-report-section">
               <strong className="final-report-title">
@@ -376,17 +587,27 @@ function App() {
               />
             </div>
 
+            {/* 다운로드 버튼 */}
+            <div className="download-btn-wrapper">
+              <button
+                className="download-btn"
+                onClick={() => downloadReportHTML(finalReportHtml, `${response.organization_name}_분석보고서.html`)}
+              >
+                <FontAwesomeIcon icon={faFileCode} /> HTML 다운로드
+              </button>
+            </div>
+
             <div className="generated-at">
               생성일시: {new Date(response.generated_at).toLocaleString('ko-KR')}
               {response.generation_time_seconds > 0 && (
                 <span> (소요 시간: {formatGenerationTime(response.generation_time_seconds)})</span>
               )}
             </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export default App;
