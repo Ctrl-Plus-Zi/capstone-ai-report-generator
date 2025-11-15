@@ -2,11 +2,14 @@ from __future__ import annotations
 import re
 import json
 import textwrap
+import logging
 from typing import List
 from datetime import datetime
 
 from langchain_core.messages import ToolMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+
+logger = logging.getLogger(__name__)
 
 
 # 보고서 초안을 위한 자료를 수집하는 조사 에이전트 노드 생성 
@@ -72,13 +75,13 @@ def create_search_agent(llm, toolkit):
         return filtered if filtered else data  # 필터링 결과가 없으면 원본 반환 (최소한의 데이터라도 유지)
 
     def search_agent_node(state):
-        # 기본 도구 목록
+        # 기본 도구 목록 (날씨 API 제거)
         all_tools = [
             toolkit.search_exhibition_info_api,
             toolkit.search_museum_collection_api,
-            toolkit.search_weather_daily_api,
             toolkit.search_performance_info_api,
             toolkit.get_monthly_age_gender_ratio_data,  # 월별 연령대별 성별 비율 데이터 조회
+            toolkit.get_google_map_rating_statistics,  # 구글맵 리뷰 평점 통계 조회
             toolkit.search_internal_documents,
             toolkit.fetch_data_snapshot,
         ]
@@ -114,10 +117,6 @@ def create_search_agent(llm, toolkit):
         if not tools:
             tools = all_tools.copy()
         
-        # 날씨 API는 항상 사용 가능 (요청이 있을 때만 사용)
-        if toolkit.search_weather_daily_api not in tools:
-            tools.append(toolkit.search_weather_daily_api)
-        
         # 연령대별 성별 비율 데이터 조회 도구는 모든 기관에서 사용 가능
         if toolkit.get_monthly_age_gender_ratio_data not in tools:
             tools.append(toolkit.get_monthly_age_gender_ratio_data)
@@ -125,13 +124,6 @@ def create_search_agent(llm, toolkit):
         # 날짜 필터링 변수 (함수 전체에서 사용)
         current_date = request_context.get("current_date", "")
         filter_active = request_context.get("filter_active_only", False)
-
-        user_text = " ".join([m.content for m in messages if getattr(m, "content", None)])
-        year, month = _extract_year_month(user_text)
-        weather_params = dict(request_context.get("weather_params") or {})
-        if year and month:
-            weather_params.update({"year": year, "month": month})
-        state["weather_params"] = weather_params  # 이후 가드에서 사용
 
         system_text = textwrap.dedent(
             """
@@ -152,18 +144,22 @@ def create_search_agent(llm, toolkit):
             - 국립중앙박물관: search_museum_collection_api만 사용 (소장품 정보)
             - 국립현대미술관: search_exhibition_info_api만 사용 (전시 정보)
             - 예술의전당: search_performance_info_api만 사용 (공연 정보)
-            - 날씨 데이터가 필요한 경우에만 search_weather_daily_api 사용 (모든 기관 공통)
             - get_monthly_age_gender_ratio_data: 모든 기관에서 사용 가능 (월별 연령대별 성별 비율 데이터)
             
             # 수집 전략
             1. 요청 컨텍스트의 organization_name(기관명)을 파악하세요
             2. 위의 기관별 API 사용 규칙을 반드시 준수하세요. 해당 기관에 맞지 않는 API는 호출하지 마세요.
             3. report_topic(보고서 주제)과 questions(질문 목록)을 분석하세요
-            4. 질문에 "2025년 1월", "2025 1월", "2025-01" 같은 날짜가 포함되어 있으면:
-               - 반드시 get_monthly_age_gender_ratio_data를 호출하여 해당 월의 연령대별 성별 비율 데이터를 조회하세요
-               - 예: "2025 1월"이면 organization_name="{organization_name}", year=2025, month=1로 호출
-               - 날짜가 없어도 연령대별 성별 비율 데이터가 필요하면 전체 기간 데이터를 조회하세요
-               - 이 도구는 모든 기관에서 사용 가능합니다 (국립현대미술관, 예술의전당, 국립중앙박물관 모두)
+            4. **필수 도구 호출 (반드시 실행)**:
+               a. get_monthly_age_gender_ratio_data: 
+                  - 질문에 "2025년 1월", "2025 1월", "2025-01", "분석 기간: 2025년 2월" 같은 날짜가 포함되어 있으면 해당 월의 데이터를 조회
+                  - 예: "2025년 2월"이면 organization_name="{organization_name}", year=2025, month=2로 호출
+                  - 날짜가 없어도 연령대별 성별 비율 데이터는 보고서에 필수이므로 반드시 호출하세요 (year=None, month=None으로 전체 기간 조회 가능)
+                  - 이 도구는 모든 기관에서 사용 가능합니다 (국립현대미술관, 예술의전당, 국립중앙박물관 모두)
+               b. get_google_map_rating_statistics:
+                  - 모든 보고서에서 고객 만족도 분석을 위해 반드시 호출하세요
+                  - 예: organization_name="{organization_name}"로 호출
+                  - 모든 기관에서 사용 가능하며, 보고서에 평점 통계가 포함되어야 합니다
             5. 요청 컨텍스트에 current_date(현재 날짜)가 있으면, 현재 진행 중인 공연/전시만 필터링하세요
                - filter_active_only가 True인 경우, 오늘 날짜({current_date}) 기준으로 진행 중인 것만 수집
                - PERIOD 또는 EVENT_PERIOD 필드를 확인하여 오늘 날짜가 기간 내에 있는지 검증
@@ -174,20 +170,26 @@ def create_search_agent(llm, toolkit):
             # 도구 호출 가이드
             - search_exhibition_info_api: keyword에 기관명 사용 (예: "국립현대미술관", "국립중앙박물관")
             - search_museum_collection_api: keyword에 주제 관련 키워드 사용 (예: "청자", "불상", "조선시대")
-            - search_weather_daily_api: request_context.weather_params(year, month, stn_ids, num_of_rows)을 우선 사용.
             - search_performance_info_api: keyword에 공연 기관명 또는 공연명 사용 (예: "예술의전당", "세종문화회관", "라트라비아타")
             - get_monthly_age_gender_ratio_data: AWS RDS에서 월별 남성/여성 연령대 비율 데이터 조회
               * 질문에 "2025년 1월", "2025 1월", "2025-01" 같은 날짜가 포함되어 있으면 해당 월의 데이터를 조회하세요
               * 예: organization_name="국립현대미술관", year=2025, month=1
               * 날짜가 없으면 전체 기간 데이터를 조회하세요 (year=None, month=None)
+            - get_google_map_rating_statistics: AWS RDS에서 구글맵 리뷰 평점 통계 조회
+              * 기관별 구글맵 리뷰의 평점 분포와 평균 평점을 계산하여 반환
+              * 예: organization_name="국립현대미술관"
+              * 모든 기관에서 사용 가능하며, 고객 만족도 분석에 유용합니다
             - 각 도구는 num_of_rows 파라미터로 조회할 데이터 개수 조정 가능 (기본: 50개)
             
             # 실행 지침
-            1. 반드시 하나 이상의 도구를 호출하여 실제 데이터를 수집하세요
+            1. **반드시 다음 도구들을 호출하세요**:
+               - get_monthly_age_gender_ratio_data: 연령대별 성별 비율 데이터 (필수)
+               - get_google_map_rating_statistics: 구글맵 리뷰 평점 통계 (필수)
+               - 기관별 API (국립현대미술관: search_exhibition_info_api, 예술의전당: search_performance_info_api 등)
             2. 도구 호출 후 결과를 간략히 요약하세요
             3. 수집한 데이터가 보고서 주제와 어떻게 연관되는지 설명하세요
             4. 구현되지 않은 도구는 호출하지 마세요
-            5. 날짜 월 입력이 들어올 경우 반드시 search_weather_daily_api를 호출하세요
+            5. 날씨 데이터는 선택사항이며, 필요할 때만 호출하세요
 
             # 출력 지침
             - 도구 호출 후 간단 요약만 남기고, 대용량 본문은 남기지 마세요.
@@ -208,10 +210,9 @@ def create_search_agent(llm, toolkit):
         tool_descriptions = {
             "search_exhibition_info_api": "1. search_exhibition_info_api: 문화시설의 전시 정보 검색 (TITLE, PERIOD, DESCRIPTION, URL, CHARGE 등)",
             "search_museum_collection_api": "2. search_museum_collection_api: 박물관 소장품 정보 검색 (title, description, artist, issuedDate 등)",
-            "search_weather_daily_api": "3. search_weather_daily_api: 기상청 ASOS 일자료(일별)를 월 단위로 조회 (tm, sumRn, maxTa, minTa 등)",
-            "search_performance_info_api": "4. search_performance_info_api: 공연 정보 검색 (TITLE, PERIOD, CHARGE, GENRE 등)",
-            "search_internal_documents": "5. search_internal_documents: 내부 문서 검색 (구현 예정)",
-            "fetch_data_snapshot": "6. fetch_data_snapshot: 데이터 스냅샷 가져오기 (구현 예정)",
+            "search_performance_info_api": "3. search_performance_info_api: 공연 정보 검색 (TITLE, PERIOD, CHARGE, GENRE 등)",
+            "search_internal_documents": "4. search_internal_documents: 내부 문서 검색 (구현 예정)",
+            "fetch_data_snapshot": "5. fetch_data_snapshot: 데이터 스냅샷 가져오기 (구현 예정)",
         }
         
         for tool in tools:
@@ -241,12 +242,16 @@ def create_search_agent(llm, toolkit):
         research_sources = list(state.get("research_sources", []))
         research_payload = list(state.get("research_payload", []))
         chart_data = state.get("chart_data", {})
+        rating_statistics = state.get("rating_statistics")
         latest_performance_image = state.get("latest_performance_image", "")
 
         org = (request_context.get("organization_name") or "").strip()
-        weather_params = request_context.get("weather_params") or state.get("weather_params") or {}
 
         called_tools: List[str] = []
+        
+        # 필수 DB 데이터 자동 호출 여부 추적
+        age_gender_called = False
+        rating_stats_called = False
 
         if hasattr(ai_response, "tool_calls"):
             for call in ai_response.tool_calls:
@@ -256,11 +261,13 @@ def create_search_agent(llm, toolkit):
                 if tool_fn is None:
                     continue
 
-                
-                if tool_name == getattr(toolkit.search_weather_daily_api, "name", "search_weather_daily_api"):
-                    merged = {**weather_params, **tool_args}
+                # 필수 DB 데이터 호출 여부 추적
+                if tool_name == getattr(toolkit.get_monthly_age_gender_ratio_data, "name", "get_monthly_age_gender_ratio_data"):
+                    age_gender_called = True
+                if tool_name == getattr(toolkit.get_google_map_rating_statistics, "name", "get_google_map_rating_statistics"):
+                    rating_stats_called = True
 
-                elif tool_name in {
+                if tool_name in {
                     getattr(toolkit.search_performance_info_api, "name", "search_performance_info_api"),
                     getattr(toolkit.search_exhibition_info_api, "name", "search_exhibition_info_api"),
                 }:
@@ -310,7 +317,23 @@ def create_search_agent(llm, toolkit):
                     if "chart_data" in tool_result and tool_result["chart_data"]:
                         tool_name_attr = getattr(toolkit.get_monthly_age_gender_ratio_data, "name", "get_monthly_age_gender_ratio_data")
                         if tool_name == tool_name_attr:
-                            chart_data["age_gender_ratio"] = tool_result["chart_data"]
+                            chart_data_value = tool_result["chart_data"]
+                            if chart_data_value:  # 빈 리스트가 아닌 경우만
+                                chart_data["age_gender_ratio"] = chart_data_value
+                                logger.info(f"차트 데이터 저장 완료: {len(chart_data_value)}개월 데이터")
+                            else:
+                                logger.warning("차트 데이터가 비어있습니다.")
+                    
+                    # 평점 통계 데이터 추출
+                    if "rating_statistics" in tool_result and tool_result["rating_statistics"]:
+                        tool_name_attr = getattr(toolkit.get_google_map_rating_statistics, "name", "get_google_map_rating_statistics")
+                        if tool_name == tool_name_attr:
+                            rating_stats = tool_result["rating_statistics"]
+                            if rating_stats and isinstance(rating_stats, dict) and rating_stats.get("total_reviews", 0) > 0:
+                                rating_statistics = rating_stats
+                                logger.info(f"평점 통계 저장 완료: 총 {rating_stats.get('total_reviews')}개 리뷰")
+                            else:
+                                logger.warning("평점 통계 데이터가 없거나 리뷰가 없습니다.")
                     
                     # 공연 정보 또는 전시 정보인 경우 가장 최근 이미지 추출
                     if tool_name in {
@@ -432,29 +455,81 @@ def create_search_agent(llm, toolkit):
                                     "sample": data[:5],
                                 })
 
-                    # 날씨
-                    if weather_params.get("year") and weather_params.get("month"):
-                        wx_args = {
-                            "year": weather_params["year"],
-                            "month": weather_params["month"],
-                            "stn_ids": weather_params.get("stn_ids", "108"),
-                            "num_of_rows": 999,
-                        }
-                        wx_res = toolkit.search_weather_daily_api.invoke(wx_args)
-                        if isinstance(wx_res, dict):
-                            n = wx_res.get("notes")
-                            if n:
-                                entry = f"- {n}"
-                                research_notes = f"{research_notes}\n{entry}".strip() if research_notes else entry
-                            research_sources.extend(wx_res.get("sources") or [])
-                            data = wx_res.get("data") or []
-                            if data:
-                                research_payload.append({
-                                    "tool": getattr(toolkit.search_weather_daily_api, "name", "search_weather_daily_api"),
-                                    "args": wx_args,
-                                    "count": len(data),
-                                    "sample": data[:5],
-                                })
+                    # 날씨 API 제거됨
+
+        # 필수 DB 데이터 자동 호출 (LLM이 호출하지 않은 경우)
+        # 1. 연령대별 성별 비율 데이터 자동 호출
+        if not age_gender_called:
+            logger.info("연령대별 성별 비율 데이터 자동 호출 시작")
+            try:
+                # 질문에서 년월 추출
+                user_text = " ".join([m.content for m in messages if getattr(m, "content", None)])
+                year, month = _extract_year_month(user_text)
+                
+                # request_context에서도 년월 확인
+                if not year or not month:
+                    year = request_context.get("current_year")
+                    month = request_context.get("current_month")
+                
+                age_gender_args = {
+                    "organization_name": org,
+                    "year": year,
+                    "month": month,
+                }
+                
+                age_gender_result = toolkit.get_monthly_age_gender_ratio_data.invoke(age_gender_args)
+                called_tools.append(getattr(toolkit.get_monthly_age_gender_ratio_data, "name", "get_monthly_age_gender_ratio_data"))
+                
+                if isinstance(age_gender_result, dict):
+                    notes = age_gender_result.get("notes", "")
+                    if notes:
+                        note_entry = f"- {notes} (자동 호출)"
+                        research_notes = f"{research_notes}\n{note_entry}".strip() if research_notes else note_entry
+                    
+                    # 차트 데이터 즉시 저장
+                    if "chart_data" in age_gender_result and age_gender_result["chart_data"]:
+                        chart_data_value = age_gender_result["chart_data"]
+                        if chart_data_value:
+                            chart_data["age_gender_ratio"] = chart_data_value
+                            logger.info(f"차트 데이터 자동 저장 완료: {len(chart_data_value)}개월 데이터")
+                        else:
+                            logger.warning("차트 데이터가 비어있습니다.")
+                    
+                    # ToolMessage는 추가하지 않음 (데이터는 state에 저장되므로 분석 에이전트가 state에서 읽음)
+                    # 잘못된 tool_call_id로 인한 OpenAI API 에러 방지
+            except Exception as e:
+                logger.error(f"연령대별 성별 비율 데이터 자동 호출 실패: {e}", exc_info=True)
+        
+        # 2. 구글맵 리뷰 평점 통계 자동 호출
+        if not rating_stats_called:
+            logger.info("구글맵 리뷰 평점 통계 자동 호출 시작")
+            try:
+                rating_args = {
+                    "organization_name": org,
+                }
+                
+                rating_result = toolkit.get_google_map_rating_statistics.invoke(rating_args)
+                called_tools.append(getattr(toolkit.get_google_map_rating_statistics, "name", "get_google_map_rating_statistics"))
+                
+                if isinstance(rating_result, dict):
+                    notes = rating_result.get("notes", "")
+                    if notes:
+                        note_entry = f"- {notes} (자동 호출)"
+                        research_notes = f"{research_notes}\n{note_entry}".strip() if research_notes else note_entry
+                    
+                    # 평점 통계 즉시 저장
+                    if "rating_statistics" in rating_result and rating_result["rating_statistics"]:
+                        rating_stats = rating_result["rating_statistics"]
+                        if rating_stats and isinstance(rating_stats, dict) and rating_stats.get("total_reviews", 0) > 0:
+                            rating_statistics = rating_stats
+                            logger.info(f"평점 통계 자동 저장 완료: 총 {rating_stats.get('total_reviews')}개 리뷰")
+                        else:
+                            logger.warning("평점 통계 데이터가 없거나 리뷰가 없습니다.")
+                    
+                    # ToolMessage는 추가하지 않음 (데이터는 state에 저장되므로 분석 에이전트가 state에서 읽음)
+                    # 잘못된 tool_call_id로 인한 OpenAI API 에러 방지
+            except Exception as e:
+                logger.error(f"구글맵 리뷰 평점 통계 자동 호출 실패: {e}", exc_info=True)
 
         summary_text = getattr(ai_response, "content", "").strip()
         if summary_text:
@@ -470,6 +545,7 @@ def create_search_agent(llm, toolkit):
             "research_payload": research_payload,
             "latest_performance_image": latest_performance_image,
             "chart_data": chart_data,
+            "rating_statistics": rating_statistics,
         }
 
     return search_agent_node

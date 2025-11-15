@@ -1,138 +1,181 @@
 """
-전시정보 API 직접 테스트 스크립트
-KCISA_CCA_145 API의 다양한 사용 방법을 테스트합니다.
+국립현대미술관 전시 정보 API 테스트 스크립트
+API가 호출되지 않는 이유를 찾기 위한 디버깅 스크립트
 """
 import sys
-import os
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
-# Windows 콘솔 인코딩 설정
-if sys.platform == 'win32':
-    import io
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
-
-# 프로젝트 루트를 Python 경로에 추가
-project_root = Path(__file__).parent.parent
-sys.path.insert(0, str(project_root))
-
+import json
+import time
+from app.agents.graph_util import ReportingTools
+from app.config import settings
 import dotenv
+
 dotenv.load_dotenv()
 
-from app.agents.api_utils import call_kcisa_api
-import json
-from datetime import datetime
 
-
-def print_section(title: str, char: str = "="):
-    """섹션 구분선 출력"""
-    print(f"\n{char * 80}")
-    print(f"{title}")
-    print(f"{char * 80}\n")
-
-
-def test_api_call(keyword=None, filter_value=None, num_of_rows=10, page_no=1):
-    """API 호출 테스트"""
-    print_section(f"[테스트] keyword={keyword}, filter_value={filter_value}, num_of_rows={num_of_rows}")
-    
-    result = call_kcisa_api(
-        api_name="KCISA_CCA_145",
-        keyword=keyword,
-        filter_value=filter_value,
-        num_of_rows=num_of_rows,
-        page_no=page_no,
-        filter_remove_fields=False
-    )
-    
-    print(f"[성공 여부] {result.get('success', False)}")
-    print(f"[데이터 개수] {result.get('count', 0)}")
-    print(f"[호출 URL] {result.get('url', 'N/A')}")
-    
-    if result.get('error'):
-        print(f"[오류] {result.get('error')}")
-    
-    if result.get('data'):
-        print(f"\n[샘플 데이터] (최대 3개):")
-        for i, item in enumerate(result['data'][:3], 1):
-            print(f"\n  [{i}]")
-            print(f"    - TITLE: {item.get('TITLE', 'N/A')}")
-            print(f"    - CNTC_INSTT_NM: {item.get('CNTC_INSTT_NM', 'N/A')}")
-            print(f"    - URL: {item.get('URL', 'N/A')}")
-            print(f"    - PERIOD: {item.get('PERIOD', 'N/A')}")
-            print(f"    - EVENT_PERIOD: {item.get('EVENT_PERIOD', 'N/A')}")
-            print(f"    - IMAGE_OBJECT: {item.get('IMAGE_OBJECT', 'N/A')[:80] if item.get('IMAGE_OBJECT') else 'N/A'}")
-            print(f"    - DESCRIPTION: {item.get('DESCRIPTION', 'N/A')[:100] if item.get('DESCRIPTION') else 'N/A'}...")
-    
-    return result
+def print_section(title: str, content: any = None):
+    """섹션 출력 헬퍼"""
+    print("\n" + "="*80)
+    print(f"[섹션] {title}")
+    print("="*80)
+    if content is not None:
+        if isinstance(content, dict):
+            print(json.dumps(content, ensure_ascii=False, indent=2))
+        elif isinstance(content, list):
+            for i, item in enumerate(content, 1):
+                if isinstance(item, dict):
+                    print(f"\n[{i}] {json.dumps(item, ensure_ascii=False)[:200]}...")
+                else:
+                    print(f"[{i}] {item}")
+        else:
+            print(content)
+    print("="*80)
 
 
 def main():
-    print_section("전시정보 API 직접 테스트 스크립트", "=")
-    print(f"[테스트 날짜] {datetime.now().strftime('%Y-%m-%d')}\n")
+    import argparse
     
-    # 테스트 케이스들
-    test_cases = [
-        {
-            "name": "1. keyword='국립현대미술관' (서버 사이드 검색)",
-            "keyword": "국립현대미술관",
-            "filter_value": None,
-            "num_of_rows": 10
-        },
-        {
-            "name": "2. keyword='국립현대미술관', filter_value='www.mmca.go.kr' (둘 다 사용)",
-            "keyword": "국립현대미술관",
-            "filter_value": "www.mmca.go.kr",
-            "num_of_rows": 10
-        },
-        {
-            "name": "3. filter_value='www.mmca.go.kr' (클라이언트 사이드 필터만)",
-            "keyword": None,
-            "filter_value": "www.mmca.go.kr",
-            "num_of_rows": 10
-        },
-    ]
+    parser = argparse.ArgumentParser(description="국립현대미술관 전시 정보 API 테스트")
+    parser.add_argument("--keyword", type=str, default="국립현대미술관", help="검색 키워드 (기본값: 국립현대미술관)")
+    parser.add_argument("--num-of-rows", type=int, default=50, help="조회할 행 수 (기본값: 50)")
+    parser.add_argument("--timeout", type=int, default=30, help="Read 타임아웃 (초) (기본값: 30)")
+    parser.add_argument("--connect-timeout", type=int, default=10, help="Connect 타임아웃 (초) (기본값: 10)")
+    parser.add_argument("--no-keyword", action="store_true", help="키워드 없이 전체 조회 테스트")
+    parser.add_argument("--show-url", action="store_true", help="실제 요청 URL 출력")
     
-    results = []
+    args = parser.parse_args()
     
-    for test_case in test_cases:
-        print_section(test_case["name"], "-")
-        result = test_api_call(
-            keyword=test_case["keyword"],
-            filter_value=test_case["filter_value"],
-            num_of_rows=test_case["num_of_rows"]
+    print("\n" + "="*80)
+    print("[테스트] 국립현대미술관 전시 정보 API 테스트")
+    print("="*80)
+    
+    # 테스트 파라미터
+    keyword = None if args.no_keyword else args.keyword
+    num_of_rows = args.num_of_rows
+    read_timeout = args.timeout
+    connect_timeout = args.connect_timeout
+    
+    print(f"\n[파라미터] 테스트 파라미터:")
+    print(f"  - 키워드: {keyword if keyword else '(없음 - 전체 조회)'}")
+    print(f"  - 행 수: {num_of_rows}")
+    print(f"  - Connect 타임아웃: {connect_timeout}초")
+    print(f"  - Read 타임아웃: {read_timeout}초")
+    
+    # 툴킷 초기화
+    print("\n[1/3] ReportingTools 초기화...")
+    toolkit = ReportingTools()
+    print("  [OK] 툴킷 초기화 완료")
+    
+    # API 직접 호출 (타임아웃 설정 가능하도록)
+    print("\n[2/3] search_exhibition_info_api 호출...")
+    print(f"  - 키워드: {keyword if keyword else '(없음)'}")
+    print(f"  - 행 수: {num_of_rows}")
+    
+    # api_utils를 직접 사용하여 타임아웃 설정 가능하게
+    from app.agents import api_utils
+    
+    start_time = time.time()
+    try:
+        # api_utils.call_kcisa_api 직접 호출
+        result = api_utils.call_kcisa_api(
+            api_name="KCISA_CCA_145",
+            keyword=keyword,
+            num_of_rows=num_of_rows,
+            connect_timeout=connect_timeout,
+            read_timeout=read_timeout,
         )
-        results.append({
-            "test_case": test_case["name"],
-            "success": result.get("success", False),
-            "count": result.get("count", 0),
-            "keyword": test_case["keyword"],
-            "filter_value": test_case["filter_value"]
-        })
+        
+        # 결과를 toolkit 형식으로 변환
+        if result["success"]:
+            formatted_result = {
+                "notes": f"{result.get('api_description', '전시 정보')} 검색 완료: 총 {result['count']}개의 전시 정보를 찾았습니다.",
+                "sources": [item.get("URL") for item in result["data"] if item.get("URL")],
+                "data": result["data"],
+                "count": result["count"],
+                "url": result.get("url"),  # URL 포함
+            }
+        else:
+            formatted_result = {
+                "notes": f"전시 정보 검색 실패: {result.get('error', '알 수 없는 오류')}",
+                "sources": [],
+                "data": [],
+                "count": 0,
+                "url": result.get("url"),  # URL 포함
+            }
+        
+        result = formatted_result
+        
+        # 실제 요청 URL 출력
+        if args.show_url and result.get("url"):
+            print(f"\n[URL] 실제 요청 URL:")
+            print(f"  {result['url']}")
+        elapsed_time = time.time() - start_time
+        
+        print(f"\n[3/3] API 호출 완료 (소요 시간: {elapsed_time:.2f}초)")
+        
+        if isinstance(result, dict):
+            print_section("API 호출 결과", result)
+            
+            # 상세 분석
+            notes = result.get("notes", "")
+            data = result.get("data", [])
+            sources = result.get("sources", [])
+            count = result.get("count", 0)
+            
+            print(f"\n[분석] 결과 분석:")
+            print(f"  - 메모: {notes}")
+            print(f"  - 데이터 개수: {len(data)}")
+            print(f"  - count 필드: {count}")
+            print(f"  - 출처 개수: {len(sources)}")
+            
+            if data:
+                print(f"\n[샘플] 데이터 샘플 (최대 5개):")
+                for i, item in enumerate(data[:5], 1):
+                    print(f"\n  [{i}] {json.dumps(item, ensure_ascii=False, indent=2)[:500]}...")
+                
+                # 필드 확인
+                if data:
+                    first_item = data[0]
+                    print(f"\n[필드] 첫 번째 데이터 필드:")
+                    for key in first_item.keys():
+                        value = first_item[key]
+                        value_str = str(value)[:100] if value else "None"
+                        print(f"  - {key}: {value_str}")
+            else:
+                print("\n[경고] 데이터가 비어있습니다!")
+                print("  - API 호출은 성공했지만 데이터가 반환되지 않았습니다.")
+                print("  - 가능한 원인:")
+                print("    1. 키워드 매칭 실패")
+                print("    2. 필터 조건에 맞는 데이터 없음")
+                print("    3. API 응답 형식 변경")
+        else:
+            print_section("API 호출 결과 (비정상)", {"type": type(result).__name__, "result": str(result)[:500]})
+            
+    except Exception as e:
+        elapsed_time = time.time() - start_time
+        print(f"\n[에러] API 호출 실패 (소요 시간: {elapsed_time:.2f}초)")
+        print(f"\n에러 타입: {type(e).__name__}")
+        print(f"에러 메시지: {str(e)}")
+        import traceback
+        print(f"\n상세 스택 트레이스:")
+        traceback.print_exc()
+        
+        print("\n" + "="*80)
+        print("[원인 분석] 에러 원인 분석")
+        print("="*80)
+        print("가능한 원인:")
+        print("  1. API 키 설정 문제 (.env 파일 확인)")
+        print("  2. 네트워크 연결 문제")
+        print("  3. API 엔드포인트 변경")
+        print("  4. 타임아웃 설정 문제")
+        print("="*80)
     
-    # 결과 요약
-    print_section("[테스트 결과 요약]", "=")
-    print(f"{'테스트 케이스':<50} {'성공':<8} {'데이터 수':<10}")
-    print("-" * 80)
-    for r in results:
-        status = "[OK]" if r["success"] else "[FAIL]"
-        count = r["count"]
-        print(f"{r['test_case']:<50} {status:<8} {count:<10}")
-    
-    # 가장 성공적인 케이스 찾기
-    successful_cases = [r for r in results if r["success"] and r["count"] > 0]
-    if successful_cases:
-        print_section("[성공한 테스트 케이스]", "=")
-        for r in successful_cases:
-            print(f"\n{r['test_case']}")
-            print(f"  - keyword: {r['keyword']}")
-            print(f"  - filter_value: {r['filter_value']}")
-            print(f"  - 데이터 수: {r['count']}")
-    else:
-        print_section("[모든 테스트 실패]", "=")
-        print("API 호출이 성공하지 않았거나 데이터가 없습니다.")
-        print("API 서버 상태나 파라미터를 확인해주세요.")
+    print("\n" + "="*80)
+    print("[완료] 테스트 완료")
+    print("="*80 + "\n")
 
 
 if __name__ == "__main__":
     main()
-

@@ -4,6 +4,7 @@ from typing import Annotated, Any, Optional
 
 from .api_utils import call_kcisa_api, call_kma_asos_daily_api, month_range
 from .stellarcube_utils import get_monthly_age_gender_ratio
+from .google_reviews_utils import get_google_map_rating_statistics
 
 
 class ReportingTools:
@@ -15,19 +16,11 @@ class ReportingTools:
         num_of_rows: Annotated[int, "조회할 데이터 행 수"] = 50
     ):
         """한국문화정보원 전시정보 통합 API (KCISA_CCA_145)를 검색합니다. 문화시설의 전시 정보, 이벤트, 프로그램 등을 조회합니다."""
-        # keyword가 URL 패턴인 경우 기관명으로 변환 시도
-        filter_value = None
-        if keyword and ("www." in keyword or ".go.kr" in keyword or ".kr" in keyword):
-            # URL 패턴인 경우, filter_value로만 사용 (서버 사이드 검색은 하지 않음)
-            filter_value = keyword
-            keyword = None
-        # 기관명인 경우 keyword로만 서버 사이드 검색 사용 (filter_value는 사용하지 않음)
-        # 서버 사이드 검색이 이미 기관명으로 필터링하므로 중복 필터링 불필요
-        
+        # keyword로만 API 호출 (filter_value 사용하지 않음)
         result = call_kcisa_api(
             api_name="KCISA_CCA_145",
-            keyword=keyword,  # 서버 사이드 검색 파라미터 (기관명인 경우만)
-            filter_value=filter_value,  # 클라이언트 사이드 필터링 (URL인 경우만)
+            keyword=keyword,  # 서버 사이드 검색 파라미터
+            filter_value=None,  # filter_value 사용하지 않음
             num_of_rows=num_of_rows,
             filter_remove_fields=False  # DESCRIPTION 포함
         )
@@ -218,4 +211,39 @@ class ReportingTools:
                 "sources": [],
                 "data": [],
                 "chart_data": []
+            }
+
+    @staticmethod
+    @tool
+    def get_google_map_rating_statistics(
+        organization_name: Annotated[str, "기관명 (예: 국립현대미술관, 국립중앙박물관, 예술의전당)"] = "국립현대미술관"
+    ):
+        """
+        AWS RDS 데이터베이스에서 구글맵 리뷰 평점 통계를 조회합니다.
+        기관별 구글맵 리뷰의 평점 분포와 평균 평점을 계산하여 반환합니다.
+        
+        반환 데이터:
+        - total_reviews: 총 리뷰 수
+        - average_rating: 평균 평점 (1.0 ~ 5.0)
+        - rating_distribution: 평점별 리뷰 수 (1점, 2점, 3점, 4점, 5점)
+        - rating_percentages: 평점별 비율 (%)
+        """
+        result = get_google_map_rating_statistics(organization_name)
+        
+        if result["success"]:
+            stats = result["data"]
+            notes = f"{result['organization_name']} 구글맵 리뷰 평점 통계 조회 완료: 총 {stats['total_reviews']}개 리뷰, 평균 평점 {stats['average_rating']}/5.0"
+            
+            return {
+                "notes": notes,
+                "sources": [],
+                "data": stats,
+                "rating_statistics": stats  # 평점 통계 데이터 별도 포함
+            }
+        else:
+            return {
+                "notes": f"구글맵 리뷰 평점 통계 조회 실패: {result.get('error', '알 수 없는 오류')}",
+                "sources": [],
+                "data": {},
+                "rating_statistics": {}
             }

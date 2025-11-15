@@ -24,7 +24,8 @@ class AgentReportService:
     def _build_initial_state(
         self, 
         organization_name: str, 
-        user_command: str
+        user_command: str,
+        report_type: str = "user"
     ) -> Dict:
         # 오늘 날짜 가져오기
         today = datetime.now()
@@ -53,6 +54,7 @@ class AgentReportService:
                 "current_year": current_year,
                 "current_month": current_month,
                 "filter_active_only": True,  # 현재 진행 중인 것만 필터링 플래그
+                "report_type": report_type,  # 보고서 유형: 'user' 또는 'operator'
             },
             "messages": [HumanMessage(content=initial_message)],
         }
@@ -60,7 +62,8 @@ class AgentReportService:
     async def generate_report(
         self,
         organization_name: str,
-        user_command: str
+        user_command: str,
+        report_type: str = "user"
     ) -> Dict:
         try:
             # 시작 시간 기록
@@ -68,7 +71,7 @@ class AgentReportService:
             logger.info(f"Starting report generation for {organization_name}")
             
             graph = self._get_graph()
-            initial_state = self._build_initial_state(organization_name, user_command)
+            initial_state = self._build_initial_state(organization_name, user_command, report_type)
             
             result = graph.graph.invoke(initial_state)
             
@@ -85,6 +88,7 @@ class AgentReportService:
                 "report_topic": user_command,
                 "generation_time_seconds": generation_time_seconds,
                 "chart_data": result.get("chart_data", {}),  # 차트 데이터 추가
+                "rating_statistics": result.get("rating_statistics"),  # 평점 통계 데이터 추가
             }
             
         except Exception as e:

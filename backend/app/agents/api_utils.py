@@ -80,6 +80,8 @@ def call_kcisa_api(
     page_no: int = 1,
     num_of_rows: int = 50,
     filter_remove_fields: bool = True,
+    connect_timeout: int = 10,
+    read_timeout: int = 30,
 ) -> dict:
     """
     KCISA XML API 공통 호출.
@@ -109,29 +111,61 @@ def call_kcisa_api(
         if keyword:
             params["keyword"] = keyword
 
+        # 실제 요청 URL 생성 (로깅용)
+        import urllib.parse
+        request_url = f"{base_url}?{urllib.parse.urlencode(params)}"
+        
+        # 로깅 (디버깅용)
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        # filter_value가 설정된 경우 로깅
+        if filter_value:
+            logger.info(f"[KCISA API] 클라이언트 사이드 필터링 사용: filter_value={filter_value}")
+        logger.info(f"[KCISA API] 호출 시작: {api_name}")
+        logger.info(f"[KCISA API] 요청 URL: {request_url[:200]}...")  # URL이 길 수 있으므로 일부만
+        logger.info(f"[KCISA API] 파라미터: keyword={keyword}, page_no={page_no}, num_of_rows={num_of_rows}")
+        logger.info(f"[KCISA API] 타임아웃 설정: connect={connect_timeout}s, read={read_timeout}s")
+
         # 요청 (재시도 로직 포함, 타임아웃: connect 10s, read 30s)
         retries = 3
         last_exc = None
         resp = None
         for attempt in range(retries):
             try:
-                resp = requests.get(base_url, params=params, timeout=(10, 30))
+                logger.info(f"[KCISA API] 시도 {attempt + 1}/{retries}")
+                resp = requests.get(base_url, params=params, timeout=(connect_timeout, read_timeout))
                 resp.raise_for_status()
+                logger.info(f"[KCISA API] 성공: 상태 코드 {resp.status_code}, 응답 크기 {len(resp.content)} bytes")
                 break
+            except requests.exceptions.Timeout as e:
+                last_exc = e
+                logger.warning(f"[KCISA API] 타임아웃 발생 (시도 {attempt + 1}/{retries}): {str(e)}")
+                if attempt < retries - 1:
+                    sleep_time = 1.5 ** attempt
+                    logger.info(f"[KCISA API] {sleep_time:.2f}초 대기 후 재시도...")
+                    time.sleep(sleep_time)
+                    continue
             except requests.exceptions.RequestException as e:
                 last_exc = e
+                logger.warning(f"[KCISA API] 요청 실패 (시도 {attempt + 1}/{retries}): {str(e)}")
                 if attempt < retries - 1:
-                    time.sleep(1.5 ** attempt)  # 1.0s → 1.5s → 2.25s
+                    sleep_time = 1.5 ** attempt
+                    logger.info(f"[KCISA API] {sleep_time:.2f}초 대기 후 재시도...")
+                    time.sleep(sleep_time)
                     continue
         
         if last_exc:
+            error_msg = f"API 호출 실패 (재시도 {retries}회 후): {str(last_exc)}"
+            logger.error(f"[KCISA API] {error_msg}")
+            logger.error(f"[KCISA API] 최종 요청 URL: {request_url}")
             return {
                 "success": False,
                 "api_name": api_name,
-                "error": f"API 호출 실패 (재시도 {retries}회 후): {str(last_exc)}",
+                "error": error_msg,
                 "data": [],
                 "count": 0,
-                "url": (resp.url if resp else f"{base_url}?<params>")
+                "url": (resp.url if resp else request_url)
             }
 
         # XML 파싱
@@ -149,28 +183,11 @@ def call_kcisa_api(
         filter_rules = list(cfg.get("filter_rules") or [])
         
         # keyword가 제공되면 서버 사이드 검색이 이미 필터링하므로 하드코딩된 필터 제거
-        # filter_value가 제공되면 기존 filter_rules를 무시하고 새로운 필터만 사용
+        # filter_value는 사용하지 않음 (keyword로만 API 호출)
         if keyword:
             # 서버 사이드 검색을 사용하는 경우 하드코딩된 필터 제거
             filter_rules = []
-        elif filter_value:
-            # filter_value만 제공된 경우 (URL 필터링 등)
-            filter_rules = []  # 기존 하드코딩된 필터 제거
-            # 기관명 필터링을 위한 동적 필터 추가
-            # CNTC_INSTT_NM 필드가 있으면 기관명으로 필터링
-            if any(f in fields for f in ["CNTC_INSTT_NM", "cntc_instt_nm"]):
-                filter_rules.append({
-                    "field": "CNTC_INSTT_NM",
-                    "op": "icontains",
-                    "value": filter_value
-                })
-            # URL 필드가 있으면 URL로도 필터링 시도
-            elif any(f in fields for f in ["URL", "url"]):
-                filter_rules.append({
-                    "field": "URL",
-                    "op": "icontains",
-                    "value": filter_value
-                })
+        # filter_value는 사용하지 않음
 
         if filter_rules:
             def _passes(r: Dict[str, Any]) -> bool:
@@ -210,6 +227,7 @@ def call_kcisa_api(
                     if field in row:
                         del row[field]
 
+        logger.info(f"[KCISA API] 파싱 완료: {len(rows)}개 항목")
         return {
             "success": True,
             "api_name": api_name,
