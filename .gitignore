@@ -67,10 +67,12 @@ postgres_data/
 # Project specific
 /backend/migrations/versions/*
 !/backend/migrations/versions/.gitkeep
+backend/tool/
 
 # Documentation & references
 docs/
 references/
+refer/
 
 # Temporary files
 __temp_*.py
