@@ -1,7 +1,7 @@
 from __future__ import annotations
 from langchain_core.tools import tool
 from typing import Annotated, Any
-
+from app.agents.api_utils import load_api_config, get_organization_url
 from .api_utils import call_kcisa_api, call_kma_asos_daily_api, month_range
 
 
@@ -10,14 +10,26 @@ class ReportingTools:
     @staticmethod
     @tool
     def search_exhibition_info_api(
-        keyword: Annotated[str, "전시 정보를 검색할 키워드 (예: www.museum.go.kr)"] = "www.museum.go.kr",
+        keyword: Annotated[str, "전시 정보를 검색할 키워드 (기관명 또는 URL)"] = "국립현대미술관",
         num_of_rows: Annotated[int, "조회할 데이터 행 수"] = 50
     ):
         """한국문화정보원 전시정보 통합 API (KCISA_CCA_145)를 검색합니다. 문화시설의 전시 정보, 이벤트, 프로그램 등을 조회합니다."""
+        config = load_api_config()
+        api_conf = config.get("KCISA_CCA_145", {})
+        org_url_map = config.get("organization_url_map", {})
+
+        filter_value = org_url_map.get(keyword, keyword)
+
+        # 기존 filter_rules 복사 및 value 동적 변경
+        dynamic_filter_rules = api_conf.get("filter_rules", [])
+        if dynamic_filter_rules:
+            dynamic_filter_rules[0]["value"] = filter_value
+        
         result = call_kcisa_api(
             api_name="KCISA_CCA_145",
-            filter_value=keyword,
-            num_of_rows=num_of_rows
+            filter_value=filter_value,
+            num_of_rows=num_of_rows,
+            filter_rules=dynamic_filter_rules
         )
         
         if result["success"]:

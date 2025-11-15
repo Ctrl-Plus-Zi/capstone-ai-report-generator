@@ -11,6 +11,14 @@ import requests
 import xml.etree.ElementTree as ET
 from bs4 import BeautifulSoup
 
+def load_api_config():
+    config_path = os.path.join(os.path.dirname(__file__), 'api_configs.json')
+    with open(config_path, 'r', encoding='utf-8') as f:
+        return json.load(f)
+
+def get_organization_url(keyword: str, config: dict) -> str:
+    org_map = config.get("organization_url_map", {})
+    return org_map.get(keyword, keyword)  # 매핑 없으면 원래 키워드 사용
 
 def load_api_registry(config_path: Optional[str] = None) -> Dict:
     """API 설정 파일을 로드합니다."""
@@ -79,6 +87,7 @@ def call_kcisa_api(
     filter_value: Optional[str] = None,
     page_no: int = 1,
     num_of_rows: int = 50,
+    filter_rules: Optional[list[dict]] = None,
 ) -> dict:
     """
     KCISA XML API 공통 호출.
@@ -124,10 +133,9 @@ def call_kcisa_api(
 
         # --- 안전한 필터 적용 ---
         # 항상 '지역 변수'로 먼저 정의해두면 UnboundLocalError 방지됨
-        filter_rules = cfg.get("filter_rules")
-        if not isinstance(filter_rules, list):
-            filter_rules = []
-
+        if filter_rules is None:
+            filter_rules = cfg.get("filter_rules", [])
+            
         if filter_rules:
             def _passes(r: Dict[str, Any]) -> bool:
                 for rule in filter_rules:

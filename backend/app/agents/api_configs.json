@@ -33,7 +33,8 @@
           {
               "field": "URL",
               "operator": "substring",
-              "value": "www.museum.go.kr"
+              "value": "www.mmca.go.kr"
+
           }
         ],
         "fields": [
@@ -63,6 +64,32 @@
             "EVENT_PERIOD"
         ]
       },
+      "organization_url_map": {
+        "국립중앙박물관": "www.museum.go.kr",
+        "국립현대미술관": "www.mmca.go.kr",
+        "한국예술종합학교": "www.knua.ac.kr",
+        "국립경주박물관": "gyeongju.museum.go.kr",
+        "국립광주박물관": "gwangju.museum.go.kr",
+        "국립부여박물관": "buyeo.museum.go.kr",
+        "국립대구박물관": "daegu.museum.go.kr",
+        "국립청주박물관": "cheongju.museum.go.kr",
+        "국립김해박물관": "gimhae.museum.go.kr",
+        "국립제주박물관": "jeju.museum.go.kr",
+        "국립춘천박물관": "chuncheon.museum.go.kr",
+        "국립진주박물관": "jinju.museum.go.kr",
+        "국립공주박물관": "gongju.museum.go.kr",
+        "국립어린이청소년도서관": "www.nlcy.go.kr",
+        "대한민국역사박물관": "www.much.go.kr",
+        "국립한글박물관": "www.hangeul.go.kr",
+        "국립아시아문화전당": "www.acc.go.kr",
+        "국립익산박물관": "iksan.museum.go.kr",
+        "예술의전당": "www.sac.or.kr",
+        "한국영상자료원": "www.koreafilm.or.kr",
+        "태권도진흥재단": "www.tpf.or.kr",
+        "국립박물관문화재단": "www.nmf.or.kr",
+        "한국문화정보원": "www.kcisa.kr"
+      },
+    
 
       "KCISA_CCA_144": {
         "api_name": "한국문화정보원 외_공연정보(통합)",
