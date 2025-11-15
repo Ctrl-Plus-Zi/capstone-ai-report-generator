@@ -137,6 +137,9 @@ export const RatingChart: React.FC<RatingChartProps> = ({ statistics, organizati
         grid: {
           display: false, // 그리드 제거
         },
+        border: {
+          display: false, // x축 선 제거
+        },
         title: {
           display: false, // x축 제목 제거
         }
@@ -149,6 +152,9 @@ export const RatingChart: React.FC<RatingChartProps> = ({ statistics, organizati
         grid: {
           display: false, // 그리드 제거
         },
+        border: {
+          display: false, // y축 선 제거
+        },
         title: {
           display: false,
         }
@@ -157,7 +163,7 @@ export const RatingChart: React.FC<RatingChartProps> = ({ statistics, organizati
   };
 
   return (
-    <div style={{ width: '100%', height: '200px', marginTop: '20px', padding: '10px 0' }}>
+    <div style={{ width: '100%', height: '133px', marginTop: '20px', padding: '10px 0' }}>
       <Bar data={chartData} options={options} />
     </div>
   );
