@@ -11,14 +11,6 @@ import requests
 import xml.etree.ElementTree as ET
 from bs4 import BeautifulSoup
 
-def load_api_config():
-    config_path = os.path.join(os.path.dirname(__file__), 'api_configs.json')
-    with open(config_path, 'r', encoding='utf-8') as f:
-        return json.load(f)
-
-def get_organization_url(keyword: str, config: dict) -> str:
-    org_map = config.get("organization_url_map", {})
-    return org_map.get(keyword, keyword)  # 매핑 없으면 원래 키워드 사용
 
 def load_api_registry(config_path: Optional[str] = None) -> Dict:
     """API 설정 파일을 로드합니다."""
@@ -87,7 +79,9 @@ def call_kcisa_api(
     filter_value: Optional[str] = None,
     page_no: int = 1,
     num_of_rows: int = 50,
-    filter_rules: Optional[list[dict]] = None,
+    filter_remove_fields: bool = True,
+    connect_timeout: int = 10,
+    read_timeout: int = 30,
 ) -> dict:
     """
     KCISA XML API 공통 호출.
@@ -117,9 +111,62 @@ def call_kcisa_api(
         if keyword:
             params["keyword"] = keyword
 
-        # 요청
-        resp = requests.get(base_url, params=params, timeout=15)
-        resp.raise_for_status()
+        # 실제 요청 URL 생성 (로깅용)
+        import urllib.parse
+        request_url = f"{base_url}?{urllib.parse.urlencode(params)}"
+        
+        # 로깅 (디버깅용)
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        # filter_value가 설정된 경우 로깅
+        if filter_value:
+            logger.info(f"[KCISA API] 클라이언트 사이드 필터링 사용: filter_value={filter_value}")
+        logger.info(f"[KCISA API] 호출 시작: {api_name}")
+        logger.info(f"[KCISA API] 요청 URL: {request_url[:200]}...")  # URL이 길 수 있으므로 일부만
+        logger.info(f"[KCISA API] 파라미터: keyword={keyword}, page_no={page_no}, num_of_rows={num_of_rows}")
+        logger.info(f"[KCISA API] 타임아웃 설정: connect={connect_timeout}s, read={read_timeout}s")
+
+        # 요청 (재시도 로직 포함, 타임아웃: connect 10s, read 30s)
+        retries = 3
+        last_exc = None
+        resp = None
+        for attempt in range(retries):
+            try:
+                logger.info(f"[KCISA API] 시도 {attempt + 1}/{retries}")
+                resp = requests.get(base_url, params=params, timeout=(connect_timeout, read_timeout))
+                resp.raise_for_status()
+                logger.info(f"[KCISA API] 성공: 상태 코드 {resp.status_code}, 응답 크기 {len(resp.content)} bytes")
+                break
+            except requests.exceptions.Timeout as e:
+                last_exc = e
+                logger.warning(f"[KCISA API] 타임아웃 발생 (시도 {attempt + 1}/{retries}): {str(e)}")
+                if attempt < retries - 1:
+                    sleep_time = 1.5 ** attempt
+                    logger.info(f"[KCISA API] {sleep_time:.2f}초 대기 후 재시도...")
+                    time.sleep(sleep_time)
+                    continue
+            except requests.exceptions.RequestException as e:
+                last_exc = e
+                logger.warning(f"[KCISA API] 요청 실패 (시도 {attempt + 1}/{retries}): {str(e)}")
+                if attempt < retries - 1:
+                    sleep_time = 1.5 ** attempt
+                    logger.info(f"[KCISA API] {sleep_time:.2f}초 대기 후 재시도...")
+                    time.sleep(sleep_time)
+                    continue
+        
+        if last_exc:
+            error_msg = f"API 호출 실패 (재시도 {retries}회 후): {str(last_exc)}"
+            logger.error(f"[KCISA API] {error_msg}")
+            logger.error(f"[KCISA API] 최종 요청 URL: {request_url}")
+            return {
+                "success": False,
+                "api_name": api_name,
+                "error": error_msg,
+                "data": [],
+                "count": 0,
+                "url": (resp.url if resp else request_url)
+            }
 
         # XML 파싱
         root = ET.fromstring(resp.text)
@@ -133,20 +180,26 @@ def call_kcisa_api(
 
         # --- 안전한 필터 적용 ---
         # 항상 '지역 변수'로 먼저 정의해두면 UnboundLocalError 방지됨
-        if filter_rules is None:
-            filter_rules = cfg.get("filter_rules", [])
-            
+        filter_rules = list(cfg.get("filter_rules") or [])
+        
+        # keyword가 제공되면 서버 사이드 검색이 이미 필터링하므로 하드코딩된 필터 제거
+        # filter_value는 사용하지 않음 (keyword로만 API 호출)
+        if keyword:
+            # 서버 사이드 검색을 사용하는 경우 하드코딩된 필터 제거
+            filter_rules = []
+        # filter_value는 사용하지 않음
+
         if filter_rules:
             def _passes(r: Dict[str, Any]) -> bool:
                 for rule in filter_rules:
                     field = rule.get("field")
-                    op = (rule.get("op") or "contains").lower()
+                    op = (rule.get("op") or rule.get("operator") or "contains").lower()
                     val = (rule.get("value") or "").strip()
                     if not field or not op or not val:
                         # 불완전 규칙은 통과
                         continue
-                    target = r.get(field) or ""
-                    if op == "contains":
+                    target = str(r.get(field) or "")
+                    if op == "contains" or op == "substring":
                         if val not in target:
                             return False
                     elif op == "icontains":
@@ -162,7 +215,19 @@ def call_kcisa_api(
 
             rows = [r for r in rows if _passes(r)]
         # --- /필터 적용 ---
+        
+        # 토큰 수 절감: 긴 텍스트 필드 제거 또는 요약
+        # 운영자용 보고서이므로 DESCRIPTION 같은 상세 설명은 불필요
+        # 단, filter_remove_fields가 False이면 필드 제거하지 않음 (디버깅용)
+        if filter_remove_fields:
+            fields_to_remove = ["DESCRIPTION", "description", "SUB_DESCRIPTION", "subDescription", 
+                               "TABLE_OF_CONTENTS", "NUMBER_PAGES"]
+            for row in rows:
+                for field in fields_to_remove:
+                    if field in row:
+                        del row[field]
 
+        logger.info(f"[KCISA API] 파싱 완료: {len(rows)}개 항목")
         return {
             "success": True,
             "api_name": api_name,

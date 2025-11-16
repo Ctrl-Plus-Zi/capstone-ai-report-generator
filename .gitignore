@@ -10,6 +10,11 @@ __pycache__/
 *.egg-info/
 .eggs/
 .env
+.env.local
+.env.development
+.env.production
+.env.*
+!.env.example
 .venv/
 venv/
 env/
@@ -78,6 +83,19 @@ __temp_*.py
 *.swo
 *~
 
-# Open API 
-# api_configs.json 
-#api_call_test.py 
+# Large files / folders to exclude
+2025-09-30-stellarcube/
+
+# Vite build output
+frontend/dist/
+frontend/.vite/
+
+# Test results
+**/test_result.json
+**/*_test_result.json
+
+# Refer folder (레퍼런스 폴더)
+refer/
+
+# Tool folder (백엔드 툴 폴더)
+backend/tool/

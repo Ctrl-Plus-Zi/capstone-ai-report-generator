@@ -21,30 +21,63 @@ def create_analyse_agent(tool_llm, summary_llm, toolkit):
         research_notes = state.get("research_notes", "")
         research_sources = state.get("research_sources", [])
         messages: List = list(state.get("messages", []))
-
-        system_text = textwrap.dedent(
+        
+        # 보고서 타입에 따른 프롬프트 분기
+        report_type = request_context.get("report_type", "user")
+        
+        # 사용자용/운영자용 분석 프롬프트 분기
+        if report_type == "operator":
+            # 운영자용: 데이터 분석 중심 (제안보다는 분석에 집중)
+            role_description = "당신은 문화시설 데이터 분석 전문가입니다. 주어진 데이터를 충분히 활용하여 이 기관에 대한 심층 분석을 수행합니다."
+            goal_description = "조사 에이전트가 수집한 모든 데이터를 분석하여, 이 기관에 대한 객관적이고 구체적인 분석 결과를 정리하세요. 이상한 인사이트나 추측이 아닌, 데이터 기반 분석이 핵심입니다."
+            focus_description = """
+            - **데이터 기반 분석**: 연령대별 성별 비율, 구글맵 리뷰 평점 분포, 전시/공연 정보 등 모든 수집 데이터를 충분히 활용
+            - **인기 타겟 분석**: 누구에게 인기가 제일 많은지 (연령대별, 성별 방문자 통계 분석)
+            - **리뷰 분석**: 구글맵 리뷰를 종합하여 각 별점(5점, 4점, 3점, 2점, 1점)을 주는 이유와 패턴 분석
+            - **트렌드 분석**: 수집된 데이터를 바탕으로 한 시설의 특성과 트렌드 분석
+            - **중요**: 제안보다는 분석에 집중. 분석 자체가 핵심이며, 보고서를 읽었을 때 '분석이 잘 되었다'는 느낌을 주어야 함
             """
+        else:
+            # 사용자용: 시설 소개 및 즐기는 방법 제안
+            role_description = "당신은 문화시설 안내 전문가입니다. 수집된 데이터를 분석하여 일반 이용자에게 이 시설이 어떤 곳인지, 어떻게 즐기는 게 좋은지, 왜 와야 하는지를 납득시킬 수 있는 정보를 제공합니다."
+            goal_description = "조사 에이전트가 수집한 데이터를 분석하고, 이용자에게 이 시설에 대한 이해와 방문 동기를 부여할 수 있는 정보를 정리하세요."
+            focus_description = """
+            - **시설 소개**: 이 시설이 어떤 장소인지 설명할 수 있는 정보
+            - **즐기는 방법**: 이 장소를 잘 즐길 수 있는 방법 (전시/공연 정보, 프로그램, 체험 활동 등)
+            - **방문 이유**: 이곳을 와야 하는 이유를 제시할 수 있는 정보
+            - **실용 정보**: 실제 방문 시 유용한 정보 (위치, 교통, 운영 시간, 관람료 등)
+            """
+
+        # request_context를 JSON 문자열로 변환 (중괄호 이스케이프하여 ChatPromptTemplate이 변수로 인식하지 않도록)
+        request_context_str = json.dumps(request_context, ensure_ascii=False, indent=2).replace('{', '{{').replace('}', '}}')
+        research_sources_str = json.dumps(research_sources, ensure_ascii=False, indent=2)
+        
+        system_text = textwrap.dedent(
+            f"""
             # 역할
-            당신은 문화시설 데이터 분석 전문가입니다. 수집된 데이터를 심층 분석하여 의미 있는 인사이트를 도출합니다.
+            {role_description}
             
             # 목표
-            조사 에이전트가 수집한 데이터를 분석하고, 보고서 작성에 필요한 핵심 발견사항을 정리하세요.
+            {goal_description}
+            
+            # 분석 초점
+            {focus_description}
             
             # 입력 데이터
-            요청 컨텍스트: {request_context}
+            요청 컨텍스트: {request_context_str}
             조사 메모: {research_notes}
-            참고 출처: {research_sources}
+            참고 출처: {research_sources_str}
             
             # 분석 프레임워크
             1. 데이터 검토
                - 수집된 데이터의 양과 품질 평가
-               - 전시 정보, 소장품 정보 등 데이터 유형 파악
+               - 수집된 모든 데이터 유형 파악 (기관에 따라 전시, 공연, 프로그램 등이 다를 수 있음)
                - 데이터 간 연관성 분석
             
             2. 패턴 및 트렌드 파악
-               - 전시 기간, 주제, 관람료 등의 패턴
-               - 소장품의 시대별, 유형별 분포
+               - 수집된 데이터에서 발견되는 패턴과 트렌드 분석
                - 기관의 특성과 강점 파악
+               - 방문객과 이용자 행동 패턴 분석
             
             3. 보고서 주제와의 연결
                - 수집된 데이터가 report_topic과 어떻게 관련되는지 분석
@@ -70,7 +103,8 @@ def create_analyse_agent(tool_llm, summary_llm, toolkit):
             # 주의사항
             - 수집된 데이터가 부족하더라도 가능한 한 의미 있는 분석을 제공하세요
             - 추측이 아닌 데이터 기반의 분석을 수행하세요
-            - 보고서 독자(의사결정자)에게 유용한 정보에 집중하세요
+            - 보고서 타입({report_type})에 맞는 독자에게 유용한 정보에 집중하세요
+            - {"운영진을 위한 데이터 분석과 전략적 제안에 집중하세요." if report_type == "operator" else "일반 이용자를 위한 실용적이고 접근하기 쉬운 정보에 집중하세요."}
             """
         ).strip()
 
@@ -79,10 +113,6 @@ def create_analyse_agent(tool_llm, summary_llm, toolkit):
                 ("system", system_text),
                 MessagesPlaceholder(variable_name="messages"),
             ]
-        ).partial(
-            request_context=json.dumps(request_context, ensure_ascii=False, indent=2),
-            research_notes=research_notes,
-            research_sources=json.dumps(research_sources, ensure_ascii=False, indent=2),
         )
 
         chain = prompt | tool_llm.bind_tools(tools)

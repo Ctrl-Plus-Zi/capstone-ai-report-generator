@@ -3,46 +3,17 @@
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@100..900&display=swap');
 
 /* 전체 레이아웃 스타일 */
-/* App.css */
-
 .app-container {
-  display: flex;
   min-height: 100vh;
-  background-color: #f5f5f5;
+  background-color: #f5f5f5; 
+  padding: 40px 20px; 
   font-family: 'Noto Sans KR', sans-serif;
-  transition: all 0.3s;
 }
-
-/* 사이드바 */
-.sidebar {
-  width: 250px;
-  transition: width 0.3s;
-  overflow: hidden;
-  background-color: #fff;
-  border-right: 1px solid #ddd;
-}
-
-.sidebar.closed {
-  width: 0;
-}
-
-/* 컨텐츠 영역 */
-.content-wrapper {
-  flex-grow: 1;
-  padding: 40px 20px;
-  transition: all 0.3s;
-}
-
-
-/* 사이드바 닫힘 시 컨텐츠가 더 넓어짐 */
-.sidebar.closed + .content-wrapper {
-  margin-left: 0;
-}
-
 
 .content-wrapper {
-  max-width: 600px; /* 분석 보고서 생성 이미지에 맞게 너비 유지 */
+  max-width: 720px; /* 보고서 가로폭을 1.2배로 확대 (600px * 1.2) */
   margin: 0 auto;
+  transition: margin-right 0.3s ease; /* 사이드바 열고 닫을 때 부드러운 전환 */
 }
 
 /* --- 제목 및 안내 문구 스타일 --- */
@@ -101,7 +72,7 @@
 }
 
 .form-input:focus {
-  border-color: #6483d1;
+  border-color: #4285f4;
   outline: none;
 }
 
@@ -121,6 +92,108 @@
 
 .guidance-text .icon {
   margin-right: 5px;
+}
+
+/* 기관 선택 버튼 그룹 */
+.org-button-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.org-select-button {
+  padding: 8px 16px;
+  border: 2px solid #ddd;
+  border-radius: 6px;
+  background-color: #f7f7f7;
+  color: #333;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.org-select-button:hover {
+  border-color: #4285f4;
+  background-color: #f0f4ff;
+}
+
+.org-select-button.selected {
+  border-color: #4285f4;
+  background-color: #e8f0fe;
+  color: #4285f4;
+  font-weight: 600;
+}
+
+/* 보고서 타입 토글 스위치 스타일 */
+.report-type-toggle {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.toggle-option {
+  flex: 1;
+  padding: 16px;
+  border: 2px solid #ddd;
+  border-radius: 8px;
+  background-color: #f7f7f7;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.toggle-option:hover {
+  border-color: #4285f4;
+  background-color: #f0f4ff;
+}
+
+.toggle-option.active {
+  border-color: #4285f4;
+  background-color: #e8f0fe;
+  box-shadow: 0 2px 8px rgba(66, 133, 244, 0.2);
+}
+
+.toggle-label {
+  font-weight: bold;
+  font-size: 16px;
+  color: #333;
+  margin-bottom: 6px;
+}
+
+.toggle-option.active .toggle-label {
+  color: #4285f4;
+}
+
+.toggle-description {
+  font-size: 12px;
+  color: #666;
+  line-height: 1.4;
+}
+
+.toggle-option.active .toggle-description {
+  color: #1976d2;
+}
+
+/* 평점 차트 섹션 */
+.rating-chart-section {
+  margin-bottom: 20px;
+  padding: 20px;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+}
+
+.rating-chart-title {
+  display: block;
+  margin-bottom: 15px;
+  color: #333;
+  font-weight: bold;
+  font-size: 18px;
 }
 
 /* --- 예시 텍스트 스타일 --- */
@@ -146,18 +219,16 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #6483d1;
+  background-color: #4285f4;
 }
 
 .submit-button-disabled {
-  background-color: #6483d1;
+  background-color: #a0c3ff;
   cursor: not-allowed;
-  opacity: 0.6;
 }
 
 .button-icon {
   margin-right: 8px;
-  color: #6483d1;
 }
 
 /* --- 오류 및 결과 섹션 (오른쪽 이미지에는 없지만 기존 기능을 유지하며 스타일만 조정) --- */
@@ -469,24 +540,76 @@
 
 
 /* 파일 저장 */
-/* 파일 저장 사이드바 */
+/* 최근 생성된 보고서 목록 접기/ 펼치기 */
+/* 사이드바 */
 .saved-list-sidebar {
-  position: fixed;      /* 화면에 고정 */
-  top: 0;               /* 상단부터 시작 */
-  right: 0;             /* 오른쪽 끝에 붙이기 */
-  height: 100vh;        /* 화면 높이 전체 */
-  width: 260px;
-  border-left: 1px solid #e5e7eb;
-  padding: 20px 16px;
-  background: #fafafa;
-  overflow-y: auto;     /* 내용 많으면 스크롤 */
-  z-index: 100;         /* 다른 요소 위에 표시 */
+  position: fixed;
+  top: 0; /* 화면 최상단 */
+  right: 0;
+  width: 300px; /* 원래 크기 유지 */
+  height: 100vh; /* 화면 전체 높이 */
+  background-color: #fff;
+  border-left: 1px solid #ddd;
+  box-shadow: -2px 0 5px rgba(0,0,0,0.1);
+  overflow-y: auto;
+  transition: transform 0.3s ease, opacity 0.3s ease;
+  z-index: 100;
+}
+
+.saved-list-sidebar.closed {
+  transform: translateX(100%);
+}
+
+.saved-content {
+  padding: 60px 20px 20px 20px; /* 상단에 토글 버튼 공간 확보 */
+}
+
+.saved-toggle-btn {
+  position: absolute;   /* 사이드바 내부 기준 */
+  top: 20px;         /* 위쪽 위치 */
+  right: 20px;       /* 오른쪽 위치 */
+  background: #6483d1;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 6px 10px;
+  cursor: pointer;
+  transition: transform 0.3s ease, background-color 0.3s ease;
+  z-index: 200;      /* 사이드바보다 위에 표시 */
+}
+
+.saved-toggle-btn:hover {
+  background-color: #6483d1;
+  box-shadow: 0 4px 12px #9eb0dc;
+  transform: scale(1.05);
+}
+
+/* 사이드바가 닫혔을 때 외부에 표시되는 토글 버튼 */
+.saved-toggle-btn-external {
+  position: fixed;
+  top: 20px;
+  right: 0;
+  background: #6483d1;
+  color: white;
+  border: none;
+  border-radius: 4px 0 0 4px;
+  padding: 6px 10px;
+  cursor: pointer;
+  transition: transform 0.3s ease, background-color 0.3s ease;
+  z-index: 200;
+  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.15);
+}
+
+.saved-toggle-btn-external:hover {
+  background-color: #6483d1;
+  box-shadow: -2px 0 12px #9eb0dc;
+  transform: scale(1.05);
 }
 
 .saved-title {
-  font-size: 16px;
-  font-weight: 600;
   margin-bottom: 14px;
+  font-size: 18px;
+  font-weight: 600;
 }
 
 .saved-empty {
@@ -591,62 +714,6 @@
   white-space: nowrap;      /* 한 줄 고정 */
 }
 
-/* 분석 기관명 선택 */
-/* 버튼 그룹 */
-.org-button-group {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-/* 버튼 공통 스타일 */
-.org-select-button {
-  flex: 1 1 calc((100% / 3) - 8px); /* 모든 버튼 동일 폭 */
-  padding: 10px 16px;
-  border-radius: 8px;
-  border: 1px solid #dcdcdc;
-  background: #fff;
-  cursor: pointer;
-  text-align: center;
-  transition: 0.2s;
-}
-
-.org-select-button:hover {
-  background: #f4f7ff;
-}
-
-.org-select-button.selected {
-  background-color: #6483d1;
-  border-color: #92a6d8;     
-  color: #FFFFFF;            /* 글자색은 진하게 유지 */
-  font-weight: 700;
-}
-
-/* 마지막 줄 2개일 경우 공간 균등 배분 */
-.org-button-group::after {
-  content: "";
-  flex: 1 1 calc((100% / 3) - 8px);
-}
-
-/* 월 선택 input 아이콘 배치 */
-.month-input-wrapper {
-  position: relative;
-  width: 100%;
-}
-
-.month-input-icon {
-  position: absolute;
-  left: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: #6483d1;
-  pointer-events: none; /* 클릭은 input으로 전달 */
-}
-
-.month-input {
-  padding-left: 36px; /* 아이콘 공간 확보 */
-}
-
 /* 삭제 버튼 추가 */
 .saved-delete-btn {
   background: #ffdede;  
@@ -664,21 +731,6 @@
   color: white;         
   background-color: #d32f2f;  
   font-weight: 600;     
-}
-
-
-.saved-tag-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px; /* 태그와 버튼 사이 간격 */
-}
-
-.saved-tag {
-  background-color: #f0f0f0;
-  color: #555;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 0.85rem;
 }
 
 .download-btn {
@@ -701,40 +753,21 @@
   font-weight: bold;
 }
 
-/* 최근 생성된 보고서 목록 접기/ 펼치기 */
-/* 사이드바 */
-.saved-list-sidebar {
-  position: fixed;
-  top: 0; /* 화면 최상단 */
-  right: 0;
-  width: 300px; /* 원래 크기 유지 */
-  height: 100vh; /* 화면 전체 높이 */
-  background-color: #fff;
-  border-left: 1px solid #ddd;
-  box-shadow: -2px 0 5px rgba(0,0,0,0.1);
-  overflow-y: auto;
-  transition: transform 0.3s ease, opacity 0.3s ease;
-  z-index: 100;
+.download-btn-wrapper {
+  margin-top: 20px;
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: center;
 }
 
-.saved-list-sidebar.closed {
-  transform: translateX(100%);
+.download-btn-wrapper .download-btn {
+  padding: 10px 20px;
+  font-size: 16px;
+  gap: 8px;
 }
 
-.saved-toggle-btn {
-  position: fixed;   /* 화면 기준으로 고정 */
-  top: 20px;         /* 위쪽 위치 */
-  right: 20px;       /* 오른쪽 위치 */
-  background: #6483d1;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  padding: 6px 10px;
-  cursor: pointer;
-  transition: transform 0.3s ease, background-color 0.3s ease;
-  z-index: 200;      /* 사이드바보다 위에 표시 */
-}
 
+<<<<<<< HEAD
 .saved-toggle-btn:hover {
   background-color: #6483d1;
   box-shadow: 0 4px 12px #9eb0dc;
@@ -816,3 +849,5 @@
 .step.active .label {
   color: #6483d1;
 }
+=======
+>>>>>>> 2bcb8f1cb7a1caff04aa108169eba1508cefa64e

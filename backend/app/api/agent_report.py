@@ -22,7 +22,8 @@ async def generate_advanced_report(
     try:
         result = await agent_report_service.generate_report(
             organization_name=request.organization_name,
-            user_command=request.user_command
+            user_command=request.user_command,
+            report_type=request.report_type
         )
         
         advanced_report = AdvancedReport(
@@ -38,6 +39,14 @@ async def generate_advanced_report(
         db.commit()
         db.refresh(advanced_report)
         
+        # 평점 통계 데이터 변환
+        rating_stats = result.get("rating_statistics")
+        if rating_stats and isinstance(rating_stats, dict) and rating_stats.get("total_reviews", 0) > 0:
+            from app.schemas.advanced_report import RatingStatistics
+            rating_statistics = RatingStatistics(**rating_stats)
+        else:
+            rating_statistics = None
+        
         return AdvancedReportResponse(
             id=advanced_report.id,
             organization_name=advanced_report.organization_name,
@@ -45,7 +54,10 @@ async def generate_advanced_report(
             final_report=advanced_report.final_report,
             research_sources=json.loads(advanced_report.research_sources_json) if advanced_report.research_sources_json else [],
             analysis_summary=advanced_report.analysis_summary or "",
-            generated_at=advanced_report.created_at
+            generated_at=advanced_report.created_at,
+            generation_time_seconds=result.get("generation_time_seconds", 0.0),
+            chart_data=result.get("chart_data", {}),  # 차트 데이터 추가
+            rating_statistics=rating_statistics  # 평점 통계 데이터 추가
         )
         
     except Exception as e:
