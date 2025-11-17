@@ -19,7 +19,8 @@ import {
     faChevronRight,
     faChevronLeft,
     faCalendarAlt,
-    faFileCode
+    faFileCode,
+    faFileLines
 } from '@fortawesome/free-solid-svg-icons'; 
 
 const API_BASE = 'http://localhost:8000';
@@ -352,7 +353,7 @@ function App() {
             {/* (from Incoming) 보고서 타입 선택 */}
             <div className="form-group">
               <div className="label-container">
-                <FontAwesomeIcon icon={faCircleInfo} color="#4285f4" />
+                <FontAwesomeIcon icon={faFileLines} color="#6483d1" />
                 <label className="form-label">보고서 유형 <span style={{color: 'red'}}>*</span></label>
               </div>
               <div className="report-type-toggle">
@@ -384,7 +385,7 @@ function App() {
             {/* 분석 질문 필드 */}
             <div className="form-group">
               <div className="label-container">
-                <FontAwesomeIcon icon={faQuestionCircle} color="#4285f4" />
+                <FontAwesomeIcon icon={faQuestionCircle} color="#6483d1" />
                 <label className="form-label">
                   분석 질문 <span style={{color: 'red'}}>*</span>
                 </label>
