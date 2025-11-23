@@ -1,11 +1,12 @@
 import logging
 import time
-from typing import Dict
+from typing import Dict, Optional
 from datetime import datetime
 from langchain_core.messages import HumanMessage
 import dotenv
 
 from app.agents.reporting_graph import ReportingGraph
+from app.models.advanced_report import AdvancedReport
 
 dotenv.load_dotenv()
 
@@ -25,7 +26,8 @@ class AgentReportService:
         self, 
         organization_name: str, 
         user_command: str,
-        report_type: str = "user"
+        report_type: str = "user",
+        parent_report: Optional[AdvancedReport] = None
     ) -> Dict:
         # 오늘 날짜 가져오기
         today = datetime.now()
@@ -33,7 +35,24 @@ class AgentReportService:
         current_year = today.year
         current_month = today.month
         
-        initial_message = f"""
+        # 부모 보고서가 있으면 컨텍스트에 추가
+        if parent_report:
+            initial_message = f"""
+{organization_name}에 대한 보고서를 작성해주세요.
+
+이전 보고서 내용:
+{parent_report.final_report}
+
+이 보고서에 대한 추가 질문:
+{user_command}
+
+오늘 날짜: {current_date}
+현재 진행 중인 공연/전시만 포함해주세요.
+
+위 이전 보고서를 참고하여, 추가 질문 "{user_command}"에 집중해서 더 세부적인 분석을 수행하고 전문적인 보고서를 작성하세요.
+""".strip()
+        else:
+            initial_message = f"""
 {organization_name}에 대한 보고서를 작성해주세요.
 
 사용자 요청:
@@ -63,15 +82,18 @@ class AgentReportService:
         self,
         organization_name: str,
         user_command: str,
-        report_type: str = "user"
+        report_type: str = "user",
+        parent_report: Optional[AdvancedReport] = None
     ) -> Dict:
         try:
             # 시작 시간 기록
             start_time = time.time()
             logger.info(f"Starting report generation for {organization_name}")
+            if parent_report:
+                logger.info(f"Parent report ID: {parent_report.id}, Depth: {parent_report.depth}")
             
             graph = self._get_graph()
-            initial_state = self._build_initial_state(organization_name, user_command, report_type)
+            initial_state = self._build_initial_state(organization_name, user_command, report_type, parent_report)
             
             result = graph.graph.invoke(initial_state)
             

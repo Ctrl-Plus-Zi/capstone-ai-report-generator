@@ -1,4 +1,4 @@
-﻿import React, { useState, useMemo } from 'react';
+﻿import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import './App.css'; 
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { marked } from 'marked';
@@ -20,7 +20,9 @@ import {
     faChevronLeft,
     faCalendarAlt,
     faFileCode,
-    faFileLines
+    faFileLines,
+    faChevronDown,
+    faChevronUp
 } from '@fortawesome/free-solid-svg-icons'; 
 
 const API_BASE = 'http://localhost:8000';
@@ -73,6 +75,8 @@ interface AdvancedReportResponse {
   generation_time_seconds: number;
   chart_data: ChartData;
   rating_statistics?: RatingStatistics;
+  parent_report_id?: number | null;
+  depth: number;
 }
 
 // 보고서 생성 시간 포맷팅 함수
@@ -139,6 +143,16 @@ function App() {
     JSON.parse(localStorage.getItem("savedReports") || "[]")
   );
 
+  // 하위 보고서 관리 (reportId -> childReports[])
+  const [childReportsMap, setChildReportsMap] = useState<Map<number, AdvancedReportResponse[]>>(new Map());
+  
+  // 보고서 접기/펼치기 상태 (reportId -> isExpanded)
+  const [expandedReports, setExpandedReports] = useState<Set<number>>(new Set());
+  
+  // 하위 보고서 로딩 상태 추적 (ref를 사용하여 무한 루프 방지)
+  const loadingChildReportsRef = useRef<Set<number>>(new Set());
+  const loadedReportsRef = useRef<Set<number>>(new Set());
+
   /** -----------------------------
    * HTML 파일 다운로드
    * ---------------------------- */
@@ -152,6 +166,47 @@ function App() {
   };
 
   /** -----------------------------
+   * 하위 보고서 조회
+   * ---------------------------- */
+  const fetchChildReports = useCallback(async (reportId: number) => {
+    // 이미 로드된 경우 다시 호출하지 않음
+    if (loadedReportsRef.current.has(reportId)) {
+      // 이미 로드된 데이터는 childReportsMap에서 가져옴
+      return [];
+    }
+    
+    // 이미 로딩 중인 경우 다시 호출하지 않음
+    if (loadingChildReportsRef.current.has(reportId)) {
+      return [];
+    }
+    
+    // 로딩 시작
+    loadingChildReportsRef.current.add(reportId);
+    
+    try {
+      const res = await fetch(`${API_BASE}/report/${reportId}/children`);
+      if (res.ok) {
+        const children = await res.json();
+        setChildReportsMap(prev => {
+          const newMap = new Map(prev);
+          newMap.set(reportId, children);
+          return newMap;
+        });
+        // 로드 완료 표시
+        loadedReportsRef.current.add(reportId);
+        loadingChildReportsRef.current.delete(reportId);
+        return children;
+      } else {
+        loadingChildReportsRef.current.delete(reportId);
+      }
+    } catch (err) {
+      console.error('Failed to fetch child reports:', err);
+      loadingChildReportsRef.current.delete(reportId);
+    }
+    return [];
+  }, []); // 의존성 배열 비움 - ref를 사용하므로 재생성 불필요
+
+  /** -----------------------------
    * 보고서 삭제 핸들러
    * ---------------------------- */
   const handleDeleteReport = (id: number) => {
@@ -159,6 +214,15 @@ function App() {
     setSavedReports(updated);
     localStorage.setItem("savedReports", JSON.stringify(updated));
     if (response?.id === id) setResponse(null);
+    // 하위 보고서 맵에서도 제거
+    setChildReportsMap(prev => {
+      const newMap = new Map(prev);
+      newMap.delete(id);
+      return newMap;
+    });
+    // ref에서도 제거
+    loadedReportsRef.current.delete(id);
+    loadingChildReportsRef.current.delete(id);
   };
 
   /** -----------------------------
@@ -201,16 +265,21 @@ function App() {
         })
       });
 
-      if (res.ok) {
-        const result = await res.json();
-        setResponse(result);
+      if (res.ok) {
+        const result = await res.json();
+        setResponse(result);
         setCurrentStep(3); // (from HEAD) 결과 확인 단계
 
         /* 사용자가 생성한 보고서 저장 */
         const updated = [...savedReports, result];
         setSavedReports(updated);
         localStorage.setItem("savedReports", JSON.stringify(updated));
-      } else {
+        
+        // 하위 보고서인 경우 부모 보고서의 하위 보고서 목록 업데이트
+        if (result.parent_report_id) {
+          await fetchChildReports(result.parent_report_id);
+        }
+      } else {
         const errorData = await res.json();
         setError(errorData.detail || '보고서 생성 실패');
         setCurrentStep(1); // (from HEAD) 실패하면 다시 1단계
@@ -222,6 +291,61 @@ function App() {
       setLoading(false);
     }
   };
+
+  /** -----------------------------
+   * 하위 보고서 생성 핸들러
+   * ---------------------------- */
+  const handleCreateChildReport = async (parentReportId: number, question: string) => {
+    // 상단 질문창의 loading 상태를 변경하지 않음 (UX 개선)
+    setError('');
+    
+    try {
+      // 부모 보고서 정보 가져오기
+      const parentReport = savedReports.find(r => r.id === parentReportId) || 
+                          Array.from(childReportsMap.values()).flat().find(r => r.id === parentReportId) ||
+                          response; // 현재 보고서도 확인
+      
+      if (!parentReport) {
+        setError('부모 보고서를 찾을 수 없습니다.');
+        return;
+      }
+
+      const res = await fetch(`${API_BASE}/report/advanced`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          organization_name: parentReport.organization_name,
+          user_command: question,
+          report_type: 'operator', // 하위 보고서는 기본적으로 operator 타입
+          parent_report_id: parentReportId
+        })
+      });
+
+      if (res.ok) {
+        const result = await res.json();
+        
+        // 하위 보고서 목록 업데이트
+        await fetchChildReports(parentReportId);
+        
+        // 새로 생성된 보고서를 현재 보고서로 설정
+        setResponse(result);
+        setCurrentStep(3); // 결과 확인 단계로 이동하여 상단 질문창 숨김
+        
+        // 저장된 보고서 목록에도 추가
+        const updated = [...savedReports, result];
+        setSavedReports(updated);
+        localStorage.setItem("savedReports", JSON.stringify(updated));
+        
+        // ref에서 로드 상태 초기화 (새 보고서를 위해)
+        loadedReportsRef.current.delete(result.id);
+      } else {
+        const errorData = await res.json();
+        setError(errorData.detail || '하위 보고서 생성 실패');
+      }
+    } catch (err) {
+      setError('서버 연결 오류');
+    }
+  };
 
   const submitButtonClass = `submit-button ${loading ? 'submit-button-disabled' : 'submit-button-active'}`;
 
@@ -270,6 +394,343 @@ function App() {
     }
   }, [response?.final_report]);
 
+  // 보고서 질문 폼 컴포넌트
+  const ReportQuestionForm: React.FC<{
+    parentReportId: number;
+    onCreateChildReport: (parentId: number, question: string) => Promise<void>;
+  }> = ({ parentReportId, onCreateChildReport }) => {
+    const [question, setQuestion] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const handleSubmit = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!question.trim() || isSubmitting) return;
+      
+      setIsSubmitting(true);
+      await onCreateChildReport(parentReportId, question.trim());
+      setQuestion('');
+      setIsSubmitting(false);
+    };
+
+    return (
+      <div style={{ 
+        marginTop: '30px', 
+        padding: '20px', 
+        backgroundColor: '#f9fafb', 
+        borderRadius: '8px',
+        border: '1px solid #e5e7eb'
+      }}>
+        <div style={{ marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <FontAwesomeIcon icon={faQuestionCircle} color="#6483d1" />
+          <strong style={{ fontSize: '16px' }}>이 보고서에 대해 추가 질문하기</strong>
+        </div>
+        <form onSubmit={handleSubmit}>
+          <textarea
+            value={question}
+            onChange={(e) => setQuestion(e.target.value)}
+            placeholder="예: 이 전시의 예상 관람객 수는? 구체적인 마케팅 전략은?"
+            style={{
+              width: '100%',
+              minHeight: '80px',
+              padding: '12px',
+              borderRadius: '6px',
+              border: '1px solid #d1d5db',
+              fontSize: '14px',
+              fontFamily: 'inherit',
+              resize: 'vertical',
+              outline: 'none'
+            }}
+            disabled={isSubmitting}
+            autoFocus={false}
+          />
+          <button
+            type="submit"
+            disabled={isSubmitting || !question.trim()}
+            style={{
+              marginTop: '10px',
+              padding: '10px 20px',
+              backgroundColor: isSubmitting || !question.trim() ? '#9ca3af' : '#6483d1',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: isSubmitting || !question.trim() ? 'not-allowed' : 'pointer',
+              fontSize: '14px',
+              fontWeight: '500'
+            }}
+          >
+            {isSubmitting ? '생성 중...' : '질문 제출'}
+          </button>
+        </form>
+      </div>
+    );
+  };
+
+  // 하위 보고서 목록 컴포넌트 (재귀적)
+  const ChildReportsList: React.FC<{
+    parentReportId: number;
+    childReports: AdvancedReportResponse[];
+    onReportClick: (report: AdvancedReportResponse) => void;
+    onFetchChildren: (reportId: number) => Promise<AdvancedReportResponse[]>;
+    expandedReports: Set<number>;
+    setExpandedReports: React.Dispatch<React.SetStateAction<Set<number>>>;
+    onCreateChildReport: (parentId: number, question: string) => Promise<void>;
+    loading: boolean;
+    childReportsMap: Map<number, AdvancedReportResponse[]>;
+  }> = ({ 
+    parentReportId, 
+    childReports, 
+    onReportClick, 
+    onFetchChildren,
+    expandedReports,
+    setExpandedReports,
+    onCreateChildReport,
+    loading,
+    childReportsMap
+  }) => {
+    const isExpanded = expandedReports.has(parentReportId);
+    const hasChildren = childReports.length > 0;
+
+    useEffect(() => {
+      // 확장되었고, 하위 보고서가 없고, 아직 로드되지 않은 경우에만 호출
+      const alreadyLoaded = loadedReportsRef.current.has(parentReportId);
+      const isLoading = loadingChildReportsRef.current.has(parentReportId);
+      
+      if (isExpanded && childReports.length === 0 && !alreadyLoaded && !isLoading) {
+        onFetchChildren(parentReportId);
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isExpanded, parentReportId, childReports.length]); // onFetchChildren은 ref를 사용하므로 제외
+
+    const toggleExpand = () => {
+      setExpandedReports(prev => {
+        const newSet = new Set(prev);
+        if (newSet.has(parentReportId)) {
+          newSet.delete(parentReportId);
+        } else {
+          newSet.add(parentReportId);
+        }
+        return newSet;
+      });
+    };
+
+    if (!hasChildren && !isExpanded) return null;
+
+    return (
+      <div style={{ marginTop: '20px', marginLeft: '20px', borderLeft: '2px solid #e5e7eb', paddingLeft: '20px' }}>
+        {hasChildren && (
+          <button
+            onClick={toggleExpand}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              marginBottom: '10px',
+              padding: '6px 12px',
+              backgroundColor: 'transparent',
+              border: '1px solid #d1d5db',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontSize: '13px',
+              color: '#6b7280'
+            }}
+          >
+            <FontAwesomeIcon icon={isExpanded ? faChevronUp : faChevronDown} />
+            <span>하위 보고서 {childReports.length}개 {isExpanded ? '접기' : '펼치기'}</span>
+          </button>
+        )}
+        
+        {isExpanded && childReports.map((childReport) => (
+          <div key={childReport.id} style={{ marginBottom: '30px' }}>
+            <div style={{ 
+              padding: '15px', 
+              backgroundColor: '#ffffff', 
+              borderRadius: '8px',
+              border: '1px solid #e5e7eb',
+              marginBottom: '15px'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                <span style={{ color: '#9ca3af', fontSize: '14px' }}>└</span>
+                <strong style={{ fontSize: '14px', color: '#6b7280' }}>하위 보고서</strong>
+              </div>
+              <div 
+                onClick={() => {
+                  onReportClick(childReport);
+                  // 하위 보고서의 하위 보고서도 로드
+                  if (!childReportsMap.has(childReport.id)) {
+                    onFetchChildren(childReport.id);
+                  }
+                }}
+                style={{ cursor: 'pointer', marginBottom: '10px' }}
+              >
+                <div style={{ marginBottom: '8px' }}>
+                  <strong>주제:</strong> {childReport.report_topic}
+                </div>
+                <div style={{ fontSize: '12px', color: '#6b7280' }}>
+                  생성일시: {new Date(childReport.generated_at).toLocaleString('ko-KR')}
+                </div>
+              </div>
+            </div>
+            
+            {/* 하위 보고서의 하위 보고서 (재귀) */}
+            <ChildReportsList
+              parentReportId={childReport.id}
+              childReports={childReportsMap.get(childReport.id) || []}
+              onReportClick={onReportClick}
+              onFetchChildren={onFetchChildren}
+              expandedReports={expandedReports}
+              setExpandedReports={setExpandedReports}
+              onCreateChildReport={onCreateChildReport}
+              loading={loading}
+              childReportsMap={childReportsMap}
+            />
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  // 사이드바 보고서 아이템 컴포넌트 (재귀적)
+  const ReportSidebarItem: React.FC<{
+    report: AdvancedReportResponse;
+    response: AdvancedReportResponse | null;
+    onReportClick: (report: AdvancedReportResponse) => void;
+    onDelete: (id: number) => void;
+    childReportsMap: Map<number, AdvancedReportResponse[]>;
+    fetchChildReports: (reportId: number) => Promise<AdvancedReportResponse[]>;
+    expandedReports: Set<number>;
+    setExpandedReports: React.Dispatch<React.SetStateAction<Set<number>>>;
+    getReportHtml: (report: string) => string;
+    downloadReportHTML: (html: string, fileName: string) => void;
+    depth?: number;
+  }> = ({ 
+    report, 
+    response, 
+    onReportClick, 
+    onDelete,
+    childReportsMap,
+    fetchChildReports,
+    expandedReports,
+    setExpandedReports,
+    getReportHtml,
+    downloadReportHTML,
+    depth = 0
+  }) => {
+    const isExpanded = expandedReports.has(report.id);
+    const childReports = childReportsMap.get(report.id) || [];
+    const hasChildren = childReports.length > 0;
+
+    useEffect(() => {
+      // 확장되었고, 하위 보고서가 없고, 아직 로드되지 않은 경우에만 호출
+      const alreadyLoaded = loadedReportsRef.current.has(report.id);
+      const isLoading = loadingChildReportsRef.current.has(report.id);
+      
+      if (isExpanded && childReports.length === 0 && !alreadyLoaded && !isLoading) {
+        fetchChildReports(report.id);
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isExpanded, report.id, childReports.length]); // fetchChildReports는 ref를 사용하므로 제외
+
+    const toggleExpand = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      setExpandedReports(prev => {
+        const newSet = new Set(prev);
+        if (newSet.has(report.id)) {
+          newSet.delete(report.id);
+        } else {
+          newSet.add(report.id);
+        }
+        return newSet;
+      });
+    };
+
+    return (
+      <div>
+        <div 
+          className={`saved-card ${response?.id === report.id ? 'selected' : ''}`}
+          onClick={() => onReportClick(report)}
+          style={{ marginLeft: `${depth * 20}px` }}
+        >
+          <div className="saved-card-top">
+            <div className="saved-left" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {depth > 0 && <span style={{ color: '#9ca3af', fontSize: '12px' }}>└</span>}
+              <div>
+                <div className="saved-organization">{report.organization_name}</div>
+                <div className="saved-topic">{report.report_topic}</div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {hasChildren && (
+                <button
+                  onClick={toggleExpand}
+                  style={{
+                    padding: '4px 8px',
+                    backgroundColor: 'transparent',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '12px'
+                  }}
+                >
+                  {isExpanded ? '▼' : '▶'}
+                </button>
+              )}
+              <span className="saved-status">완료</span>
+              <button
+                className="saved-delete-btn"
+                onClick={e => {
+                  e.stopPropagation();
+                  onDelete(report.id);
+                }}
+              >
+                삭제
+              </button>
+            </div>
+          </div>
+          
+          <div className="saved-card-bottom">
+            <span className="saved-date">
+              {new Date(report.generated_at).toLocaleDateString("ko-KR")}
+            </span>
+            <div className="saved-tag-actions">
+              <span className="saved-tag">종합 분석</span>
+              <button
+                className="download-btn"
+                onClick={e => {
+                  e.stopPropagation();
+                  const reportHtml = getReportHtml(report.final_report);
+                  downloadReportHTML(reportHtml, `${report.organization_name}_분석보고서.html`);
+                }}
+              >
+                <FontAwesomeIcon icon={faFileCode} />
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        {isExpanded && hasChildren && (
+          <div>
+            {childReports.map(childReport => (
+              <ReportSidebarItem
+                key={childReport.id}
+                report={childReport}
+                response={response}
+                onReportClick={onReportClick}
+                onDelete={onDelete}
+                childReportsMap={childReportsMap}
+                fetchChildReports={fetchChildReports}
+                expandedReports={expandedReports}
+                setExpandedReports={setExpandedReports}
+                getReportHtml={getReportHtml}
+                downloadReportHTML={downloadReportHTML}
+                depth={depth + 1}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="app-container">
       <div className="content-wrapper">
@@ -294,7 +755,8 @@ function App() {
           </div>
         </div>
 
-        {/* 입력 폼 */}
+        {/* 입력 폼 - currentStep이 3이 아닐 때만 표시 */}
+        {currentStep !== 3 && (
         <div className="card-form">
           <form onSubmit={handleSubmit}>
             
@@ -422,7 +884,8 @@ function App() {
               )}
             </button>
           </form>
-        </div>
+        </div>
+        )}
 
         {/* (Merged) 최근 생성된 보고서 사이드바 */}
         <div className={`saved-list-sidebar ${savedOpen ? '' : 'closed'}`}>
@@ -443,51 +906,32 @@ function App() {
             ) : (
               <div className="saved-cards">
                 {/* (from HEAD) .reverse()로 최신순 정렬 */}
-                {[...savedReports].reverse().map(r => (
-                  <div 
-                    key={r.id} 
-                    /* (from HEAD) 'selected' 클래스 추가 */
-                    className={`saved-card ${response?.id === r.id ? 'selected' : ''}`} 
-                    onClick={() => setResponse(r)}
-                  >
-                    {/* (from Incoming) 카드 상단 (삭제 버튼 포함) */}
-                    <div className="saved-card-top">
-                      <div className="saved-left">
-                        <div className="saved-organization">{r.organization_name}</div>
-                        <div className="saved-topic">{r.report_topic}</div>
-                      </div>
-                      <span className="saved-status">완료</span>
-                      <button
-                        className="saved-delete-btn"
-                        onClick={e => {
-                          e.stopPropagation();
-                          handleDeleteReport(r.id);
-                        }}
-                      >
-                        삭제
-                      </button>
-                    </div>
-                    
-                    {/* (from Incoming) 카드 하단 (다운로드 버튼 포함) */}
-                    <div className="saved-card-bottom">
-                      <span className="saved-date">
-                        {new Date(r.generated_at).toLocaleDateString("ko-KR")}
-                      </span>
-                      <div className="saved-tag-actions">
-                        <span className="saved-tag">종합 분석</span>
-                        <button
-                          className="download-btn"
-                          onClick={e => {
-                            e.stopPropagation();
-                            const reportHtml = getReportHtml(r.final_report);
-                            downloadReportHTML(reportHtml, `${r.organization_name}_분석보고서.html`);
-                          }}
-                        >
-                          <FontAwesomeIcon icon={faFileCode} />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
+                {[...savedReports]
+                  .filter(r => !r.parent_report_id) // 원본 보고서만 표시
+                  .reverse()
+                  .map(r => (
+                  <ReportSidebarItem
+                    key={r.id}
+                    report={r}
+                    response={response}
+                    onReportClick={async (report) => {
+                      setResponse(report);
+                      setCurrentStep(3); // 결과 확인 단계로 이동하여 상단 질문창 숨김
+                      // 하위 보고서 로드
+                      if (!childReportsMap.has(report.id)) {
+                        await fetchChildReports(report.id);
+                      }
+                      // 보고서를 확장 상태로 설정
+                      setExpandedReports(prev => new Set(prev).add(report.id));
+                    }}
+                    onDelete={handleDeleteReport}
+                    childReportsMap={childReportsMap}
+                    fetchChildReports={fetchChildReports}
+                    expandedReports={expandedReports}
+                    setExpandedReports={setExpandedReports}
+                    getReportHtml={getReportHtml}
+                    downloadReportHTML={downloadReportHTML}
+                  />
                 ))}
               </div>
             )}
@@ -643,6 +1087,28 @@ function App() {
                 <span> (소요 시간: {formatGenerationTime(response.generation_time_seconds)})</span>
               )}
             </div>
+
+            {/* 하위 보고서 질문창 */}
+            <ReportQuestionForm 
+              parentReportId={response.id}
+              onCreateChildReport={handleCreateChildReport}
+            />
+
+            {/* 하위 보고서 목록 */}
+            <ChildReportsList
+              parentReportId={response.id}
+              childReports={childReportsMap.get(response.id) || []}
+              onReportClick={(report) => {
+                setResponse(report);
+                setCurrentStep(3); // 결과 확인 단계로 이동하여 상단 질문창 숨김
+              }}
+              onFetchChildren={fetchChildReports}
+              expandedReports={expandedReports}
+              setExpandedReports={setExpandedReports}
+              onCreateChildReport={handleCreateChildReport}
+              loading={loading}
+              childReportsMap={childReportsMap}
+            />
           </div>
         )}
       </div>
