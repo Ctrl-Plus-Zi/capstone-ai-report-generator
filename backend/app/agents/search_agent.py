@@ -9,6 +9,8 @@ from datetime import datetime
 from langchain_core.messages import ToolMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
+from app.agents.db_agent_tools import db_tools, DB_SCHEMA_CONTEXT
+
 logger = logging.getLogger(__name__)
 
 
@@ -84,7 +86,7 @@ def create_search_agent(llm, toolkit):
             toolkit.get_google_map_rating_statistics,  # 구글맵 리뷰 평점 통계 조회
             toolkit.search_internal_documents,
             toolkit.fetch_data_snapshot,
-        ]
+        ] + db_tools  # DB 쿼리 도구 추가
 
         def _extract_year_month(text: str):
             m = re.search(r'(\d{4})\s*[-./]?\s*(?:년)?\s*(1[0-2]|0?[1-9])\s*(?:월)?', text)
@@ -144,11 +146,15 @@ def create_search_agent(llm, toolkit):
             # 사용 가능한 도구 (기관별로 제한됨)
             {available_tools_description}
             
+            # 데이터베이스 스키마 정보
+            {db_schema_context}
+            
             # 기관별 API 사용 규칙 (중요!)
             - 국립중앙박물관: search_museum_collection_api만 사용 (소장품 정보)
             - 국립현대미술관: search_exhibition_info_api만 사용 (전시 정보)
             - 예술의전당: search_performance_info_api만 사용 (공연 정보)
             - get_monthly_age_gender_ratio_data: 모든 기관에서 사용 가능 (월별 연령대별 성별 비율 데이터)
+            - DB 쿼리 도구: 모든 기관에서 사용 가능 (세부 데이터 조회)
             
             # 수집 전략
             1. 요청 컨텍스트의 organization_name(기관명)을 파악하세요
@@ -185,6 +191,27 @@ def create_search_agent(llm, toolkit):
               * 모든 기관에서 사용 가능하며, 고객 만족도 분석에 유용합니다
             - 각 도구는 num_of_rows 파라미터로 조회할 데이터 개수 조정 가능 (기본: 50개)
             
+            # DB 쿼리 도구 사용 가이드 (세부 데이터 조회용)
+            위 데이터베이스 스키마 정보를 참고하여 필요한 데이터를 조회하세요.
+            
+            - search_database: 시설명 등 키워드로 LIKE 검색
+              * 예: search_database("facilities", "mrc_snbd_nm", "박물관") → 시설명에 '박물관' 포함된 시설
+              * 예: search_database("google_map_facilities", "slta_nm", "국립중앙박물관") → 시설명 검색
+            
+            - filter_database: 정확한 조건으로 필터링
+              * 예: filter_database("mrcno_demographics", '{{"cri_ym": 202410}}') → 2024년 10월 인구통계
+              * 예: filter_database("persona_metrics", '{{"cutr_facl_id": "12345678"}}') → 특정 시설 페르소나
+            
+            - query_with_range_filter: 범위 조건 + 검색 조건 동시 적용
+              * 예: query_with_range_filter("persona_metrics", None, None, "cri_ym", 202401, 202412) → 2024년 전체
+              * 예: query_with_range_filter("google_map_reviews", "sns_content_original_text", "좋아요", "sns_content_rating", 4, 5) → 4~5점 리뷰 중 '좋아요' 포함
+            
+            - get_aggregated_statistics: 그룹별 집계 통계
+              * 예: get_aggregated_statistics("google_map_reviews", "slta_cd", "id", "count") → 시설별 리뷰 수
+              * 예: get_aggregated_statistics("google_map_reviews", "slta_cd", "sns_content_rating", "avg") → 시설별 평균 평점
+            
+            - get_database_schema_info: 사용 가능한 테이블/컬럼 정보 조회
+            
             # 실행 지침
             1. **반드시 다음 도구들을 호출하세요**:
                - get_monthly_age_gender_ratio_data: 연령대별 성별 비율 데이터 (필수)
@@ -217,6 +244,12 @@ def create_search_agent(llm, toolkit):
             "search_performance_info_api": "3. search_performance_info_api: 공연 정보 검색 (TITLE, PERIOD, CHARGE, GENRE 등)",
             "search_internal_documents": "4. search_internal_documents: 내부 문서 검색 (구현 예정)",
             "fetch_data_snapshot": "5. fetch_data_snapshot: 데이터 스냅샷 가져오기 (구현 예정)",
+            # DB 쿼리 도구
+            "search_database": "6. search_database: DB에서 LIKE 검색 (시설명, 리뷰 텍스트 등)",
+            "filter_database": "7. filter_database: DB에서 정확한 조건 필터링",
+            "query_with_range_filter": "8. query_with_range_filter: DB에서 범위 조건 + 검색 조건 동시 적용",
+            "get_aggregated_statistics": "9. get_aggregated_statistics: DB에서 그룹별 집계 통계",
+            "get_database_schema_info": "10. get_database_schema_info: 사용 가능한 테이블/컬럼 정보 조회",
         }
         
         for tool in tools:
@@ -236,12 +269,11 @@ def create_search_agent(llm, toolkit):
             organization_name=(request_context.get("organization_name") or ""),
             current_date=current_date if current_date else "날짜 정보 없음",
             available_tools_description=available_tools_description,
-            )
+            db_schema_context=DB_SCHEMA_CONTEXT,
+        )
 
         chain = prompt | llm.bind_tools(tools)
-        ai_response = chain.invoke({"messages": messages})
-        messages.append(ai_response)
-
+        
         research_notes = state.get("research_notes")
         research_sources = list(state.get("research_sources", []))
         research_payload = list(state.get("research_payload", []))
@@ -256,8 +288,33 @@ def create_search_agent(llm, toolkit):
         # 필수 DB 데이터 자동 호출 여부 추적
         age_gender_called = False
         rating_stats_called = False
-
-        if hasattr(ai_response, "tool_calls"):
+        
+        # 연속 쿼리 지원: 최대 3회 반복 (Multi-hop Query)
+        MAX_TOOL_ITERATIONS = 3
+        previous_tool_calls = set()  # 중복 호출 감지용
+        
+        for iteration in range(MAX_TOOL_ITERATIONS):
+            ai_response = chain.invoke({"messages": messages})
+            messages.append(ai_response)
+            
+            # 도구 호출이 없으면 반복 종료
+            if not hasattr(ai_response, "tool_calls") or not ai_response.tool_calls:
+                logger.info(f"연속 쿼리 종료: {iteration + 1}번째 반복에서 도구 호출 없음")
+                break
+            
+            # 중복 호출 감지: 이전과 동일한 도구+인자면 종료
+            current_calls = set()
+            for call in ai_response.tool_calls:
+                call_signature = f"{call.get('name')}:{json.dumps(call.get('args', {}), sort_keys=True)}"
+                current_calls.add(call_signature)
+            
+            if current_calls == previous_tool_calls:
+                logger.info(f"연속 쿼리 종료: {iteration + 1}번째 반복에서 중복 호출 감지")
+                break
+            
+            previous_tool_calls = current_calls
+            logger.info(f"연속 쿼리 {iteration + 1}회차: {len(ai_response.tool_calls)}개 도구 호출")
+            
             for call in ai_response.tool_calls:
                 tool_name = call.get("name")
                 tool_args = dict(call.get("args", {}) or {})
@@ -455,75 +512,75 @@ def create_search_agent(llm, toolkit):
                             "count": len(data),
                             "sample": data[:5],  # 과하지 않게 일부만
                         })
-                if not called_tools:
-            # 공연
-                    if org:
-                        perf_res = toolkit.search_performance_info_api.invoke({"keyword": org, "num_of_rows": 50})
-                        # 날짜 필터링 적용
-                        if isinstance(perf_res, dict) and filter_active and current_date:
-                            original_data = perf_res.get("data", [])
-                            if original_data:
-                                filtered_data = _filter_by_current_date(original_data, current_date)
-                                if len(filtered_data) < len(original_data):
-                                    perf_res["data"] = filtered_data
-                                    perf_res["count"] = len(filtered_data)
-                                    original_notes = perf_res.get("notes", "")
-                                    perf_res["notes"] = f"{original_notes} (날짜 필터링: {len(original_data)}개 → {len(filtered_data)}개)"
+        
+        # 연속 쿼리 루프 종료 후 fallback 처리
+        if not called_tools:
+            # 공연 API fallback 호출
+            if org:
+                perf_res = toolkit.search_performance_info_api.invoke({"keyword": org, "num_of_rows": 50})
+                # 날짜 필터링 적용
+                if isinstance(perf_res, dict) and filter_active and current_date:
+                    original_data = perf_res.get("data", [])
+                    if original_data:
+                        filtered_data = _filter_by_current_date(original_data, current_date)
+                        if len(filtered_data) < len(original_data):
+                            perf_res["data"] = filtered_data
+                            perf_res["count"] = len(filtered_data)
+                            original_notes = perf_res.get("notes", "")
+                            perf_res["notes"] = f"{original_notes} (날짜 필터링: {len(original_data)}개 → {len(filtered_data)}개)"
+                
+                if isinstance(perf_res, dict):
+                    n = perf_res.get("notes")
+                    if n:
+                        entry = f"- {n}"
+                        research_notes = f"{research_notes}\n{entry}".strip() if research_notes else entry
+                    research_sources.extend(perf_res.get("sources") or [])
+                    data = perf_res.get("data") or []
+                    
+                    # 공연 정보인 경우 가장 최근 이미지 추출
+                    if data and not latest_performance_image:
+                        def extract_date_from_period(period_str):
+                            """PERIOD 또는 EVENT_PERIOD에서 종료 날짜 추출"""
+                            if not period_str:
+                                return None
+                            try:
+                                for sep in ["~", " - ", "-"]:
+                                    if sep in period_str:
+                                        parts = period_str.split(sep, 1)
+                                        if len(parts) == 2:
+                                            end_str = parts[1].strip().replace(".", "-").replace("/", "-")
+                                            end_str = re.sub(r'(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})', r'\1-\2-\3', end_str)
+                                            end_parts = end_str.split("-")
+                                            if len(end_parts) == 3:
+                                                end_str = f"{end_parts[0]}-{end_parts[1].zfill(2)}-{end_parts[2].zfill(2)}"
+                                            try:
+                                                return datetime.strptime(end_str, "%Y-%m-%d")
+                                            except:
+                                                continue
+                            except:
+                                pass
+                            return None
                         
-                        if isinstance(perf_res, dict):
-                            n = perf_res.get("notes")
-                            if n:
-                                entry = f"- {n}"
-                                research_notes = f"{research_notes}\n{entry}".strip() if research_notes else entry
-                            research_sources.extend(perf_res.get("sources") or [])
-                            data = perf_res.get("data") or []
-                            
-                            # 공연 정보 또는 전시 정보인 경우 가장 최근 이미지 추출
-                            if data and not latest_performance_image:
-                                def extract_date_from_period(period_str):
-                                    """PERIOD 또는 EVENT_PERIOD에서 종료 날짜 추출"""
-                                    if not period_str:
-                                        return None
-                                    try:
-                                        for sep in ["~", " - ", "-"]:
-                                            if sep in period_str:
-                                                parts = period_str.split(sep, 1)
-                                                if len(parts) == 2:
-                                                    end_str = parts[1].strip().replace(".", "-").replace("/", "-")
-                                                    end_str = re.sub(r'(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})', r'\1-\2-\3', end_str)
-                                                    end_parts = end_str.split("-")
-                                                    if len(end_parts) == 3:
-                                                        end_str = f"{end_parts[0]}-{end_parts[1].zfill(2)}-{end_parts[2].zfill(2)}"
-                                                    try:
-                                                        return datetime.strptime(end_str, "%Y-%m-%d")
-                                                    except:
-                                                        continue
-                                    except:
-                                        pass
-                                    return None
-                                
-                                performance_with_images = []
-                                for item in data:
-                                    image_url = item.get("IMAGE_OBJECT") or item.get("image_object") or item.get("IMAGE") or item.get("image")
-                                    if image_url:
-                                        period = item.get("PERIOD") or item.get("EVENT_PERIOD") or item.get("period") or item.get("event_period")
-                                        end_date = extract_date_from_period(period)
-                                        if end_date:
-                                            performance_with_images.append((end_date, image_url, item.get("TITLE") or item.get("title", "")))
-                                
-                                if performance_with_images:
-                                    performance_with_images.sort(key=lambda x: x[0], reverse=True)
-                                    latest_performance_image = performance_with_images[0][1]
-                            
-                            if data:
-                                research_payload.append({
-                                    "tool": getattr(toolkit.search_performance_info_api, "name", "search_performance_info_api"),
-                                    "args": {"keyword": org, "num_of_rows": 50},
-                                    "count": len(data),
-                                    "sample": data[:5],
-                                })
-
-                    # 날씨 API 제거됨
+                        performance_with_images = []
+                        for item in data:
+                            image_url = item.get("IMAGE_OBJECT") or item.get("image_object") or item.get("IMAGE") or item.get("image")
+                            if image_url:
+                                period = item.get("PERIOD") or item.get("EVENT_PERIOD") or item.get("period") or item.get("event_period")
+                                end_date = extract_date_from_period(period)
+                                if end_date:
+                                    performance_with_images.append((end_date, image_url, item.get("TITLE") or item.get("title", "")))
+                        
+                        if performance_with_images:
+                            performance_with_images.sort(key=lambda x: x[0], reverse=True)
+                            latest_performance_image = performance_with_images[0][1]
+                    
+                    if data:
+                        research_payload.append({
+                            "tool": getattr(toolkit.search_performance_info_api, "name", "search_performance_info_api"),
+                            "args": {"keyword": org, "num_of_rows": 50},
+                            "count": len(data),
+                            "sample": data[:5],
+                        })
 
         # 필수 DB 데이터 자동 호출
         # 1. 연령대별 성별 비율 데이터 자동 호출

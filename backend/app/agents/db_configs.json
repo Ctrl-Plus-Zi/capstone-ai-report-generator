@@ -1,0 +1,175 @@
+{
+  "facilities": {
+    "description": "문화시설 기본 정보 테이블 (7,178개 시설) - 삼성카드/LG U+ 데이터 기반",
+    "columns": {
+      "cutr_facl_id": "시설 고유 ID (PK) - 다른 테이블과 연결하는 핵심 키",
+      "mrcno": "가맹점 번호",
+      "mrc_snbd_nm": "시설명 (예: 국립중앙박물관, 예술의전당)",
+      "tco_tobz_c": "업종 코드 (예: 주차, 문화시설 등)",
+      "nasd_c": "행정동 코드",
+      "pnu": "필지 고유 번호",
+      "lon": "경도 (longitude)",
+      "lat": "위도 (latitude)"
+    },
+    "searchable_fields": ["mrc_snbd_nm", "tco_tobz_c", "nasd_c"],
+    "primary_key": "cutr_facl_id",
+    "row_count": 7178
+  },
+  
+  "google_map_facilities": {
+    "description": "구글맵에서 수집한 시설 정보 (95개 시설) - 리뷰 데이터와 연결",
+    "columns": {
+      "id": "자동 생성 ID (PK)",
+      "slta_cd": "시설 코드 (예: SLTA035) - google_map_reviews와 연결 키",
+      "slta_nm": "시설명 (예: 국립중앙박물관, 경복궁, 홍대거리)",
+      "slta_type": "시설 유형 (예: 관광지, 공원, 시장)",
+      "slta_addr": "주소",
+      "slta_cor_x_axis": "경도 (X좌표)",
+      "slta_cor_y_axis": "위도 (Y좌표)",
+      "cutr_facl_id": "facilities 테이블 연결 ID (대부분 NULL - 미매핑)",
+      "created_at": "데이터 수집 일시"
+    },
+    "searchable_fields": ["slta_cd", "slta_nm", "slta_type", "slta_addr"],
+    "primary_key": "id",
+    "foreign_key": "slta_cd -> google_map_reviews.slta_cd",
+    "row_count": 95
+  },
+  
+  "google_map_reviews": {
+    "description": "구글맵 리뷰 데이터 (48,966개 리뷰) - 방문자 평점 및 리뷰 텍스트",
+    "columns": {
+      "id": "자동 생성 ID (PK)",
+      "buzz_id": "리뷰 고유 ID",
+      "slta_cd": "시설 코드 (FK) - google_map_facilities와 연결",
+      "sns_type": "SNS 유형 (googlemap)",
+      "sns_content_id": "구글맵 콘텐츠 ID",
+      "sns_content_issue_date": "리뷰 작성 일시",
+      "sns_content_rating": "평점 (1.0 ~ 5.0)",
+      "sns_content_original_text": "리뷰 원문 (원어)",
+      "sns_content_translated_text": "번역된 리뷰 텍스트",
+      "sns_content_original_text_link": "리뷰 원본 링크",
+      "created_at": "데이터 수집 일시"
+    },
+    "searchable_fields": ["slta_cd", "sns_content_original_text", "sns_content_translated_text"],
+    "primary_key": "id",
+    "foreign_key": "slta_cd -> google_map_facilities.slta_cd",
+    "row_count": 48966
+  },
+  
+  "mrcno_demographics": {
+    "description": "방문자 연령/성별 인구통계 데이터 (14,133개 레코드) - 삼성카드 기반",
+    "columns": {
+      "id": "자동 생성 ID (PK)",
+      "cutr_facl_id": "시설 ID (FK, INTEGER) - facilities 테이블과 연결",
+      "cri_ym": "기준 연월 (INTEGER, YYYYMM 형식, 예: 202410 - 숫자로 전달)",
+      "nebhd_dv": "주변 지역 구분 (예: 3.3km)",
+      "rn": "순위",
+      "mrcno_pct_20_male": "20대 남성 방문 비율",
+      "mrcno_pct_30_male": "30대 남성 방문 비율",
+      "mrcno_pct_40_male": "40대 남성 방문 비율",
+      "mrcno_pct_50_male": "50대 남성 방문 비율",
+      "mrcno_pct_60_male": "60대 남성 방문 비율",
+      "mrcno_pct_70_male": "70대 이상 남성 방문 비율",
+      "mrcno_pct_20_female": "20대 여성 방문 비율",
+      "mrcno_pct_30_female": "30대 여성 방문 비율",
+      "mrcno_pct_40_female": "40대 여성 방문 비율",
+      "mrcno_pct_50_female": "50대 여성 방문 비율",
+      "mrcno_pct_60_female": "60대 여성 방문 비율",
+      "mrcno_pct_70_female": "70대 이상 여성 방문 비율",
+      "mrcno_foreign_rt": "외국인 방문 비율"
+    },
+    "searchable_fields": ["cutr_facl_id", "cri_ym", "nebhd_dv"],
+    "primary_key": "id",
+    "foreign_key": "cutr_facl_id -> facilities.cutr_facl_id",
+    "row_count": 14133
+  },
+  
+  "persona_metrics": {
+    "description": "방문자 페르소나 상세 지표 (61,636개 레코드) - LG U+ 데이터 기반, 50+ 지표 포함",
+    "columns": {
+      "id": "자동 생성 ID (PK)",
+      "cutr_facl_id": "시설 ID (FK, INTEGER) - facilities 테이블과 연결",
+      "cri_ym": "기준 연월 (INTEGER, YYYYMM 형식, 예: 202408 - 숫자로 전달)",
+      
+      "_comment_age_gender": "=== 연령/성별 비율 ===",
+      "persona_pct_20_male": "20대 남성 비율",
+      "persona_pct_30_male": "30대 남성 비율",
+      "persona_pct_40_male": "40대 남성 비율",
+      "persona_pct_50_male": "50대 남성 비율",
+      "persona_pct_60_male": "60대 남성 비율",
+      "persona_pct_70_male": "70대 이상 남성 비율",
+      "persona_pct_20_female": "20대 여성 비율",
+      "persona_pct_30_female": "30대 여성 비율",
+      "persona_pct_40_female": "40대 여성 비율",
+      "persona_pct_50_female": "50대 여성 비율",
+      "persona_pct_60_female": "60대 여성 비율",
+      "persona_pct_70_female": "70대 이상 여성 비율",
+      "persona_foreign_rt": "외국인 비율",
+      
+      "_comment_income": "=== 소득 수준 ===",
+      "income_01": "저소득층 비율",
+      "income_02": "중소득층 비율",
+      "income_03": "고소득층 비율",
+      
+      "_comment_tendency": "=== 소비/관심 성향 점수 ===",
+      "clt_ev_acti_inrt_tndc_score": "문화/이벤트 활동 관심 성향 점수",
+      "dom_trv_inrt_tndc_score": "국내 여행 관심 성향 점수",
+      "frn_trv_inrt_tndc_score": "해외 여행 관심 성향 점수",
+      "hl_mngt_inrt_tndc_score": "건강 관리 관심 성향 점수",
+      "prmm_csm_tndc_score": "프리미엄 소비 성향 점수",
+      "prc_snsv_csm_tndc_score": "가격 민감 소비 성향 점수",
+      "dgtl_tndc_score": "디지털 성향 점수",
+      
+      "_comment_lifestyle": "=== 라이프스타일 ===",
+      "per_pet": "반려동물 보유 지수",
+      "active_senior": "액티브 시니어 지수",
+      
+      "_comment_visit_time": "=== 방문 시간대별 비율 (0시~23시) ===",
+      "we_rt": "주말 방문 비율",
+      "wk_rt": "평일 방문 비율",
+      "ct_00_rt": "0시 방문 비율",
+      "ct_01_rt": "1시 방문 비율",
+      "ct_06_rt": "6시 방문 비율",
+      "ct_09_rt": "9시 방문 비율",
+      "ct_12_rt": "12시(점심) 방문 비율",
+      "ct_15_rt": "15시 방문 비율",
+      "ct_18_rt": "18시(저녁) 방문 비율",
+      "ct_21_rt": "21시 방문 비율",
+      "ct_23_rt": "23시 방문 비율",
+      
+      "_comment_visit_weekday": "=== 요일별 방문 비율 ===",
+      "ct_week_01": "월요일 방문 비율",
+      "ct_week_02": "화요일 방문 비율",
+      "ct_week_03": "수요일 방문 비율",
+      "ct_week_04": "목요일 방문 비율",
+      "ct_week_05": "금요일 방문 비율",
+      "ct_week_06": "토요일 방문 비율",
+      "ct_week_07": "일요일 방문 비율"
+    },
+    "searchable_fields": ["cutr_facl_id", "cri_ym"],
+    "primary_key": "id",
+    "foreign_key": "cutr_facl_id -> facilities.cutr_facl_id",
+    "row_count": 61636
+  },
+  
+  "advanced_reports": {
+    "description": "LangGraph 에이전트가 생성한 AI 분석 보고서 (223개)",
+    "columns": {
+      "id": "보고서 ID (PK)",
+      "organization_name": "분석 대상 기관명",
+      "user_command": "사용자 요청 명령",
+      "report_topic": "보고서 주제",
+      "final_report": "최종 보고서 본문 (Markdown)",
+      "research_sources_json": "참고 출처 목록 (JSON)",
+      "analysis_summary": "분석 요약",
+      "parent_report_id": "부모 보고서 ID (하위 보고서인 경우)",
+      "depth": "보고서 계층 깊이 (0: 원본)",
+      "report_type": "보고서 유형 (user/operator)",
+      "analysis_target_dates": "분석 대상 날짜 (JSON 배열)",
+      "created_at": "생성 일시"
+    },
+    "searchable_fields": ["organization_name", "report_topic", "user_command"],
+    "primary_key": "id",
+    "row_count": 223
+  }
+}
