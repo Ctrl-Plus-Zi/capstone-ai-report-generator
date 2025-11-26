@@ -20,6 +20,7 @@ def create_analyse_agent(tool_llm, summary_llm, toolkit):
         request_context = state.get("request_context", {})
         research_notes = state.get("research_notes", "")
         research_sources = state.get("research_sources", [])
+        research_payload = state.get("research_payload", [])
         messages: List = list(state.get("messages", []))
         
         # 보고서 타입에 따른 프롬프트 분기
@@ -50,7 +51,9 @@ def create_analyse_agent(tool_llm, summary_llm, toolkit):
 
         # request_context를 JSON 문자열로 변환 (중괄호 이스케이프하여 ChatPromptTemplate이 변수로 인식하지 않도록)
         request_context_str = json.dumps(request_context, ensure_ascii=False, indent=2).replace('{', '{{').replace('}', '}}')
-        research_sources_str = json.dumps(research_sources, ensure_ascii=False, indent=2)
+        research_sources_str = json.dumps(research_sources, ensure_ascii=False, indent=2).replace('{', '{{').replace('}', '}}')
+        research_notes_str = str(research_notes).replace('{', '{{').replace('}', '}}')
+        research_payload_str = json.dumps(research_payload, ensure_ascii=False, indent=2).replace('{', '{{').replace('}', '}}')
         
         system_text = textwrap.dedent(
             f"""
@@ -65,8 +68,9 @@ def create_analyse_agent(tool_llm, summary_llm, toolkit):
             
             # 입력 데이터
             요청 컨텍스트: {request_context_str}
-            조사 메모: {research_notes}
+            조사 메모: {research_notes_str}
             참고 출처: {research_sources_str}
+            수집된 데이터 샘플: {research_payload_str}
             
             # 분석 프레임워크
             1. 데이터 검토
