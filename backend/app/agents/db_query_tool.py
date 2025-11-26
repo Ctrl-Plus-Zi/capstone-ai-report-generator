@@ -62,6 +62,9 @@ class DBQueryTool:
             if filters:
                 for key, value in filters.items():
                     if key in table.c:
+                        # 배열인 경우 첫 번째 값만 사용 (LLM이 잘못 전달하는 경우 대응)
+                        if isinstance(value, list) and len(value) > 0:
+                            value = value[0]
                         conditions.append(table.c[key] == value)
             
             # 2. LIKE 검색 조건

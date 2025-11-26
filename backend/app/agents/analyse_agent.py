@@ -1,11 +1,155 @@
 from __future__ import annotations
 
 import json
+import logging
 import textwrap
-from typing import List
+from datetime import datetime
+from typing import List, Dict, Any
+
+
+def _json_serial(obj):
+    """JSON 직렬화 헬퍼 (datetime 처리)"""
+    if isinstance(obj, datetime):
+        return obj.isoformat()
+    raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
 
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+
+from app.agents.block_tools import block_tools
+from app.agents.block_transform_tools import (
+    transform_demographics_to_age_chart,
+    transform_demographics_to_gender_chart,
+    transform_reviews_to_rating_chart,
+    transform_tools,
+)
+
+logger = logging.getLogger("uvicorn.error")
+
+
+def _auto_generate_blocks(research_payload: List[dict], latest_image: str = "") -> List[dict]:
+    """research_payload 기반 블록 자동 생성"""
+    blocks = []
+    calculated_stats = None
+    reviews_data = []
+    demographics_data = []
+    
+    for item in research_payload:
+        tool_name = item.get("tool", "")
+        
+        if tool_name == "calculated_stats":
+            calculated_stats = item.get("stats", {})
+            logger.info(f"[ANALYSE_AGENT] 계산된 통계 발견: {list(calculated_stats.keys())}")
+        
+        if "reviews" in tool_name or tool_name == "execute_data_queries.reviews":
+            data = item.get("data", []) or item.get("sample", [])
+            if data:
+                reviews_data = data
+                logger.info(f"[ANALYSE_AGENT] 리뷰 데이터 발견: {len(reviews_data)}개")
+        
+        if "demographics" in tool_name:
+            data = item.get("data", []) or item.get("sample", [])
+            if data:
+                demographics_data = data
+                logger.info(f"[ANALYSE_AGENT] 인구통계 데이터 발견: {len(demographics_data)}개")
+        
+        sample = item.get("sample", [])
+        if sample and isinstance(sample, list) and len(sample) > 0:
+            first_item = sample[0] if isinstance(sample[0], dict) else {}
+            if "sns_content_rating" in first_item and not reviews_data:
+                reviews_data = sample
+                logger.info(f"[ANALYSE_AGENT] 리뷰 샘플 데이터 발견: {len(reviews_data)}개")
+    
+    if calculated_stats and "review_stats" in calculated_stats:
+        stats = calculated_stats["review_stats"]
+        distribution = stats.get("rating_distribution", {})
+        
+        if distribution:
+            labels = ["5점", "4점", "3점", "2점", "1점"]
+            values = [
+                distribution.get("5점", {}).get("count", 0),
+                distribution.get("4점", {}).get("count", 0),
+                distribution.get("3점", {}).get("count", 0),
+                distribution.get("2점", {}).get("count", 0),
+                distribution.get("1점", {}).get("count", 0),
+            ]
+            
+            blocks.append({
+                "type": "chart",
+                "chartType": "bar",
+                "title": "리뷰 평점 분포",
+                "data": {"labels": labels, "values": values},
+                "description": stats.get("summary", "")
+            })
+            logger.info(f"[ANALYSE_AGENT] 리뷰 평점 차트 생성 (계산된 통계)")
+    
+    elif reviews_data:
+        try:
+            rating_chart = transform_reviews_to_rating_chart.invoke({"review_data": reviews_data})
+            blocks.append(rating_chart)
+            logger.info(f"[ANALYSE_AGENT] 리뷰 평점 차트 생성 (직접 계산)")
+        except Exception as e:
+            logger.warning(f"[ANALYSE_AGENT] 리뷰 차트 생성 실패: {e}")
+    else:
+        logger.info(f"[ANALYSE_AGENT] 리뷰 데이터 없음 - 차트 생략")
+    
+    if calculated_stats and "demographics_stats" in calculated_stats:
+        stats = calculated_stats["demographics_stats"]
+        
+        if stats.get("has_data"):
+            age_dist = stats.get("age_distribution", {})
+            if age_dist:
+                blocks.append({
+                    "type": "chart",
+                    "chartType": "doughnut",
+                    "title": "연령대별 방문자 분포",
+                    "data": {
+                        "labels": list(age_dist.keys()),
+                        "values": list(age_dist.values())
+                    },
+                    "description": stats.get("summary", "")
+                })
+            
+            # 성별 분포
+            gender_dist = stats.get("gender_distribution", {})
+            if gender_dist:
+                blocks.append({
+                    "type": "chart",
+                    "chartType": "doughnut",
+                    "title": "성별 방문자 분포",
+                    "data": {
+                        "labels": list(gender_dist.keys()),
+                        "values": list(gender_dist.values())
+                    },
+                    "description": ""
+                })
+            
+            logger.info(f"[ANALYSE_AGENT] 인구통계 차트 생성 (계산된 통계)")
+    
+    elif demographics_data:
+        # 기존 방식: 직접 계산
+        try:
+            age_chart = transform_demographics_to_age_chart.invoke({"demographics_data": demographics_data})
+            blocks.append(age_chart)
+            gender_chart = transform_demographics_to_gender_chart.invoke({"demographics_data": demographics_data})
+            blocks.append(gender_chart)
+            logger.info(f"[ANALYSE_AGENT] 인구통계 차트 생성 (직접 계산)")
+        except Exception as e:
+            logger.warning(f"[ANALYSE_AGENT] 인구통계 차트 생성 실패: {e}")
+    else:
+        logger.info(f"[ANALYSE_AGENT] 인구통계 데이터 없음 - 차트 생략")
+    
+    # 4. 이미지 블록
+    if latest_image:
+        blocks.append({
+            "type": "image",
+            "url": latest_image,
+            "alt": "최근 전시/공연 이미지",
+            "caption": "가장 최근 전시 또는 공연"
+        })
+        logger.info(f"[ANALYSE_AGENT] 이미지 블록 생성")
+    
+    return blocks
 
 
 # 수집된 자료를 분석하고 보고서 초안을 작성하는 분석 에이전트 노드 생성 
@@ -50,10 +194,10 @@ def create_analyse_agent(tool_llm, summary_llm, toolkit):
             """
 
         # request_context를 JSON 문자열로 변환 (중괄호 이스케이프하여 ChatPromptTemplate이 변수로 인식하지 않도록)
-        request_context_str = json.dumps(request_context, ensure_ascii=False, indent=2).replace('{', '{{').replace('}', '}}')
-        research_sources_str = json.dumps(research_sources, ensure_ascii=False, indent=2).replace('{', '{{').replace('}', '}}')
+        request_context_str = json.dumps(request_context, ensure_ascii=False, indent=2, default=_json_serial).replace('{', '{{').replace('}', '}}')
+        research_sources_str = json.dumps(research_sources, ensure_ascii=False, indent=2, default=_json_serial).replace('{', '{{').replace('}', '}}')
         research_notes_str = str(research_notes).replace('{', '{{').replace('}', '}}')
-        research_payload_str = json.dumps(research_payload, ensure_ascii=False, indent=2).replace('{', '{{').replace('}', '}}')
+        research_payload_str = json.dumps(research_payload, ensure_ascii=False, indent=2, default=_json_serial).replace('{', '{{').replace('}', '}}')
         
         system_text = textwrap.dedent(
             f"""
@@ -136,7 +280,7 @@ def create_analyse_agent(tool_llm, summary_llm, toolkit):
                 messages.append(
                     ToolMessage(
                         tool_call_id=call.get("id"),
-                        content=json.dumps(tool_result) if tool_result is not None else "{}",
+                        content=json.dumps(tool_result, default=_json_serial) if tool_result is not None else "{}",
                     )
                 )
                 if isinstance(tool_result, dict):
@@ -171,10 +315,35 @@ def create_analyse_agent(tool_llm, summary_llm, toolkit):
         if not analysis_findings:
             analysis_findings = "도구 통합이 완료되면 분석 결과가 생성됩니다."
 
+        # === Server-Driven UI: 블록 자동 생성 ===
+        latest_image = state.get("latest_performance_image", "")
+        block_drafts = _auto_generate_blocks(research_payload, latest_image)
+        
+        # 분석 요약을 마크다운 블록으로 추가 (맨 앞)
+        if analysis_findings:
+            intro_block = {
+                "type": "markdown",
+                "content": f"## 분석 요약\n\n{analysis_findings}"
+            }
+            block_drafts.insert(0, intro_block)
+        
+        # 결론 마크다운 블록 추가 (맨 뒤)
+        org_name = request_context.get("organization_name", "해당 시설")
+        conclusion_block = {
+            "type": "markdown",
+            "content": f"## 결론\n\n{org_name}에 대한 분석이 완료되었습니다. 위 데이터를 바탕으로 보고서를 작성합니다."
+        }
+        block_drafts.append(conclusion_block)
+        
+        logger.info(f"[ANALYSE_AGENT] block_drafts 생성 완료: {len(block_drafts)}개 블록")
+
         return {
             "messages": messages,
+            # 기존 호환용
             "analysis_outline": analysis_outline,
             "analysis_findings": analysis_findings,
+            # Server-Driven UI용
+            "block_drafts": block_drafts,
         }
 
     return analyse_agent_node

@@ -1,0 +1,142 @@
+/* Report Block Styles */
+
+.report-container {
+  padding: 20px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.report-header {
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.report-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.report-meta {
+  font-size: 0.875rem;
+  color: #666;
+}
+
+/* Markdown Block */
+.markdown-block {
+  margin-bottom: 16px;
+  line-height: 1.6;
+}
+
+.markdown-block h1,
+.markdown-block h2,
+.markdown-block h3,
+.markdown-block h4 {
+  margin-top: 1em;
+  margin-bottom: 0.5em;
+}
+
+.markdown-block p {
+  margin-bottom: 0.75em;
+}
+
+.markdown-block ul,
+.markdown-block ol {
+  margin-left: 1.5em;
+  margin-bottom: 0.75em;
+}
+
+/* Chart Block */
+.chart-block {
+  margin-bottom: 24px;
+  padding: 16px;
+  background: #fafafa;
+  border-radius: 8px;
+}
+
+.chart-block-title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 12px;
+  text-align: center;
+}
+
+.chart-block-container {
+  max-width: 400px;
+  margin: 0 auto;
+}
+
+.chart-block-description {
+  font-size: 0.875rem;
+  color: #666;
+  text-align: center;
+  margin-top: 12px;
+}
+
+/* Image Block */
+.image-block {
+  margin-bottom: 24px;
+  text-align: center;
+}
+
+.image-block img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+}
+
+.image-block-caption {
+  font-size: 0.875rem;
+  color: #666;
+  margin-top: 8px;
+}
+
+/* Table Block */
+.table-block {
+  margin-bottom: 24px;
+  overflow-x: auto;
+}
+
+.table-block-title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.table-block table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.table-block th,
+.table-block td {
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.table-block th {
+  background: #f5f5f5;
+  font-weight: 600;
+}
+
+.table-block-description {
+  font-size: 0.875rem;
+  color: #666;
+  margin-top: 8px;
+}
+
+/* Row Block */
+.row-block {
+  display: flex;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+}
+
+.row-block > * {
+  flex: 1;
+  min-width: 250px;
+}
+

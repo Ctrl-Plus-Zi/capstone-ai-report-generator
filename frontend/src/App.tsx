@@ -4,6 +4,8 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { marked } from 'marked';
 import { AgeGenderChart } from './AgeGenderChart';
 import { RatingChart } from './RatingChart';
+import { ReportRenderer } from './components/report';
+import type { BlockReportResponse } from './types/report';
 
 // marked 옵션 설정
 marked.use({
@@ -131,6 +133,8 @@ function App() {
   const [selectedMonth, setSelectedMonth] = useState('');
   const [reportType, setReportType] = useState<'user' | 'operator'>('user');
   const [response, setResponse] = useState<AdvancedReportResponse | null>(null);
+  const [blockResponse, setBlockResponse] = useState<BlockReportResponse | null>(null); // v2 API 응답
+  const [useV2Api, setUseV2Api] = useState(false); // v2 API 사용 여부
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   
@@ -245,6 +249,7 @@ function App() {
     setLoading(true);
     setError('');
     setResponse(null);
+    setBlockResponse(null); // v2 응답도 초기화
 
     // (from Incoming) 선택값을 질문에 포함
     let finalCommand = userCommand;
@@ -260,7 +265,10 @@ function App() {
       // selectedMonth를 analysis_target_dates 배열로 변환
       const analysisTargetDates = selectedMonth ? [selectedMonth] : undefined;
       
-      const res = await fetch(`${API_BASE}/report/advanced`, {
+      // API 엔드포인트 선택 (v2 또는 기존)
+      const apiEndpoint = useV2Api ? `${API_BASE}/report/v2` : `${API_BASE}/report/advanced`;
+      
+      const res = await fetch(apiEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -273,29 +281,39 @@ function App() {
 
       if (res.ok) {
         const result = await res.json();
-        setResponse(result);
-        setCurrentStep(3); // (from HEAD) 결과 확인 단계
-
-        /* 사용자가 생성한 보고서 저장 */
-        const updated = [...savedReports, result];
-        setSavedReports(updated);
-        localStorage.setItem("savedReports", JSON.stringify(updated));
         
-        // 하위 보고서인 경우 부모 보고서의 하위 보고서 목록 업데이트
-        if (result.parent_report_id) {
-          await fetchChildReports(result.parent_report_id);
+        if (useV2Api) {
+          // v2 API 응답 처리
+          setBlockResponse(result as BlockReportResponse);
+          setResponse(null); // 기존 응답 초기화
+        } else {
+          // 기존 API 응답 처리
+          setResponse(result);
+          setBlockResponse(null);
+          
+          /* 사용자가 생성한 보고서 저장 (기존 방식만) */
+          const updated = [...savedReports, result];
+          setSavedReports(updated);
+          localStorage.setItem("savedReports", JSON.stringify(updated));
+          
+          // 하위 보고서인 경우 부모 보고서의 하위 보고서 목록 업데이트
+          if (result.parent_report_id) {
+            await fetchChildReports(result.parent_report_id);
+          }
         }
+        
+        setCurrentStep(3); // 결과 확인 단계
       } else {
-        const errorData = await res.json();
-        setError(errorData.detail || '보고서 생성 실패');
-        setCurrentStep(1); // (from HEAD) 실패하면 다시 1단계
-      }
-    } catch (err) {
-      setError('서버 연결 오류');
-      setCurrentStep(1); // (from HEAD)
-    } finally {
-      setLoading(false);
-    }
+        const errorData = await res.json();
+        setError(errorData.detail || '보고서 생성 실패');
+        setCurrentStep(1); // 실패하면 다시 1단계
+      }
+    } catch (err) {
+      setError('서버 연결 오류');
+      setCurrentStep(1);
+    } finally {
+      setLoading(false);
+    }
   };
 
   /** -----------------------------
@@ -1006,7 +1024,45 @@ function App() {
               </div>
             </div>
 
-            {/* 분석 질문 필드 */}
+            {/* v2 API 토글 (Server-Driven UI) */}
+            <div className="form-group">
+              <div className="label-container">
+                <FontAwesomeIcon icon={faFileCode} color="#6483d1" />
+                <label className="form-label">렌더링 방식</label>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={useV2Api}
+                    onChange={(e) => setUseV2Api(e.target.checked)}
+                    style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                  />
+                  <span style={{ fontSize: '14px', color: '#374151' }}>
+                    Server-Driven UI (v2 API) 사용
+                  </span>
+                </label>
+                {useV2Api && (
+                  <span style={{ 
+                    fontSize: '12px', 
+                    color: '#059669', 
+                    backgroundColor: '#d1fae5', 
+                    padding: '2px 8px', 
+                    borderRadius: '4px' 
+                  }}>
+                    NEW
+                  </span>
+                )}
+              </div>
+              <div className="guidance-text">
+                <FontAwesomeIcon icon={faCircleInfo} className="icon" />
+                {useV2Api 
+                  ? '백엔드에서 블록 기반으로 구조화된 보고서를 생성합니다 (실험적)'
+                  : '기존 마크다운 방식의 보고서를 생성합니다'}
+              </div>
+            </div>
+
+            {/* 분석 질문 필드 */}
             <div className="form-group">
               <div className="label-container">
                 <FontAwesomeIcon icon={faQuestionCircle} color="#6483d1" />
@@ -1221,8 +1277,62 @@ function App() {
           </div>
         )}
 
-        {/* (from Incoming) 결과 출력 (차트 2개 포함된 상세 버전) */}
-        {response && (
+        {/* v2 API 응답 (Server-Driven UI) */}
+        {blockResponse && (
+          <div className="result-card">
+            <h2 className="result-title">
+              {blockResponse.title}
+            </h2>
+            
+            <div className="info-summary">
+              <div style={{ marginBottom: '10px' }}>
+                <strong>주제:</strong> {blockResponse.report_topic}
+              </div>
+              <div>
+                <strong>보고서 ID:</strong> {blockResponse.id}
+              </div>
+            </div>
+
+            {/* Server-Driven UI 블록 렌더링 */}
+            <div style={{ marginTop: '20px' }}>
+              <ReportRenderer 
+                blocks={blockResponse.blocks}
+              />
+            </div>
+
+            {/* 참고 출처 */}
+            {blockResponse.research_sources && blockResponse.research_sources.length > 0 && (
+              <div className="sources-section">
+                <strong className="sources-title">참고 출처</strong>
+                <ul className="sources-list">
+                  {blockResponse.research_sources.slice(0, 5).map((source, idx) => (
+                    <li key={idx}>
+                      <a href={source} target="_blank" rel="noopener noreferrer" className="source-link">
+                        {source}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+                {blockResponse.research_sources.length > 5 && (
+                  <div className="more-sources">
+                    외 {blockResponse.research_sources.length - 5}개
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 생성 시간 */}
+            <div className="generated-at">
+              생성일시: {new Date(blockResponse.created_at).toLocaleString('ko-KR')}
+              {blockResponse.generation_time_seconds > 0 && (
+                <span> (소요 시간: {formatGenerationTime(blockResponse.generation_time_seconds)})</span>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* 기존 API 응답 (마크다운 방식) */}
+        {response && (
           <div className="result-card">
             <h2 className="result-title">
               {response.organization_name} 분석 보고서

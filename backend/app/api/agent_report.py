@@ -124,7 +124,7 @@ async def generate_advanced_report(
             parent_report_id=advanced_report.parent_report_id,
             depth=advanced_report.depth,
             report_type=advanced_report.report_type,
-            analysis_target_dates=analysis_target_dates_list
+            analysis_target_dates=analysis_target_dates_list,
         )
         
     except HTTPException:
