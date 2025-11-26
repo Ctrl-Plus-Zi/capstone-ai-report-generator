@@ -29,6 +29,10 @@ class AdvancedReport(Base):
     )
     depth: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     
+    # 보고서 유형 및 날짜 필드
+    report_type: Mapped[str] = mapped_column(String(20), default="user", nullable=False)
+    analysis_target_dates: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON 배열 문자열 저장
+    
     # 관계 설정
     parent_report: Mapped["AdvancedReport | None"] = relationship(
         "AdvancedReport",

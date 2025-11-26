@@ -77,6 +77,8 @@ interface AdvancedReportResponse {
   rating_statistics?: RatingStatistics;
   parent_report_id?: number | null;
   depth: number;
+  report_type?: string | null;
+  analysis_target_dates?: string[] | null;
 }
 
 // 보고서 생성 시간 포맷팅 함수
@@ -255,13 +257,17 @@ function App() {
     }
 
     try {
+      // selectedMonth를 analysis_target_dates 배열로 변환
+      const analysisTargetDates = selectedMonth ? [selectedMonth] : undefined;
+      
       const res = await fetch(`${API_BASE}/report/advanced`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           organization_name: organizationName,
           user_command: finalCommand,
-          report_type: reportType // (from Incoming)
+          report_type: reportType,
+          analysis_target_dates: analysisTargetDates // 선택한 월을 날짜 배열로 전달
         })
       });
 
@@ -295,7 +301,7 @@ function App() {
   /** -----------------------------
    * 하위 보고서 생성 핸들러
    * ---------------------------- */
-  const handleCreateChildReport = async (parentReportId: number, question: string) => {
+  const handleCreateChildReport = async (parentReportId: number, question: string, additionalDates?: string[]) => {
     // 상단 질문창의 loading 상태를 변경하지 않음 (UX 개선)
     setError('');
     
@@ -316,8 +322,9 @@ function App() {
         body: JSON.stringify({
           organization_name: parentReport.organization_name,
           user_command: question,
-          report_type: 'operator', // 하위 보고서는 기본적으로 operator 타입
-          parent_report_id: parentReportId
+          report_type: parentReport.report_type || 'operator', // 부모 보고서의 타입 상속
+          parent_report_id: parentReportId,
+          additional_dates: additionalDates || [] // 추가 날짜 전달
         })
       });
 
@@ -397,19 +404,51 @@ function App() {
   // 보고서 질문 폼 컴포넌트
   const ReportQuestionForm: React.FC<{
     parentReportId: number;
-    onCreateChildReport: (parentId: number, question: string) => Promise<void>;
-  }> = ({ parentReportId, onCreateChildReport }) => {
+    parentDates?: string[] | null;
+    onCreateChildReport: (parentId: number, question: string, additionalDates?: string[]) => Promise<void>;
+  }> = ({ parentReportId, parentDates, onCreateChildReport }) => {
     const [question, setQuestion] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [additionalDates, setAdditionalDates] = useState<string[]>([]);
+    const [newDateInput, setNewDateInput] = useState('');
 
     const handleSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
       if (!question.trim() || isSubmitting) return;
       
       setIsSubmitting(true);
-      await onCreateChildReport(parentReportId, question.trim());
+      await onCreateChildReport(parentReportId, question.trim(), additionalDates.length > 0 ? additionalDates : undefined);
       setQuestion('');
+      setAdditionalDates([]);
+      setNewDateInput('');
       setIsSubmitting(false);
+    };
+
+    const handleAddDate = () => {
+      if (!newDateInput.trim()) return;
+      
+      // YYYY-MM 형식 검증
+      const dateRegex = /^\d{4}-\d{2}$/;
+      if (!dateRegex.test(newDateInput)) {
+        alert('날짜 형식이 올바르지 않습니다. YYYY-MM 형식으로 입력해주세요. (예: 2025-01)');
+        return;
+      }
+      
+      // 중복 체크
+      const allDates = [...(parentDates || []), ...additionalDates];
+      if (allDates.includes(newDateInput)) {
+        alert('이미 추가된 날짜입니다.');
+        return;
+      }
+      
+      // 추가 및 정렬
+      const updated = [...additionalDates, newDateInput].sort();
+      setAdditionalDates(updated);
+      setNewDateInput('');
+    };
+
+    const handleRemoveDate = (dateToRemove: string) => {
+      setAdditionalDates(additionalDates.filter(d => d !== dateToRemove));
     };
 
     return (
@@ -424,6 +463,129 @@ function App() {
           <FontAwesomeIcon icon={faQuestionCircle} color="#6483d1" />
           <strong style={{ fontSize: '16px' }}>이 보고서에 대해 추가 질문하기</strong>
         </div>
+        
+        {/* 부모 보고서의 날짜 표시 */}
+        {parentDates && parentDates.length > 0 && (
+          <div style={{ marginBottom: '15px', padding: '12px', backgroundColor: '#ffffff', borderRadius: '6px', border: '1px solid #e5e7eb' }}>
+            <div style={{ marginBottom: '8px', fontSize: '13px', color: '#6b7280', fontWeight: '500' }}>
+              분석 대상 날짜 (부모 보고서)
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+              {parentDates.map((date, idx) => {
+                // YYYY-MM 형식을 YYYY년 M월 형식으로 변환
+                const formatDate = (dateStr: string) => {
+                  if (!dateStr) return dateStr;
+                  const parts = dateStr.split('-');
+                  if (parts.length === 2) {
+                    return `${parts[0]}년 ${parseInt(parts[1])}월`;
+                  }
+                  return dateStr;
+                };
+                
+                return (
+                  <span
+                    key={idx}
+                    style={{
+                      padding: '4px 10px',
+                      backgroundColor: '#e5e7eb',
+                      color: '#374151',
+                      borderRadius: '4px',
+                      fontSize: '12px',
+                      fontWeight: '500'
+                    }}
+                  >
+                    {formatDate(date)}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        )}
+        
+        {/* 날짜 추가 UI */}
+        <div style={{ marginBottom: '15px', padding: '12px', backgroundColor: '#ffffff', borderRadius: '6px', border: '1px solid #e5e7eb' }}>
+          <div style={{ marginBottom: '8px', fontSize: '13px', color: '#6b7280', fontWeight: '500' }}>
+            추가 분석 날짜
+          </div>
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
+            <input
+              type="month"
+              value={newDateInput}
+              onChange={(e) => {
+                const value = e.target.value;
+                if (value) {
+                  // YYYY-MM 형식으로 변환
+                  setNewDateInput(value);
+                }
+              }}
+              style={{
+                padding: '6px 10px',
+                borderRadius: '4px',
+                border: '1px solid #d1d5db',
+                fontSize: '13px',
+                outline: 'none'
+              }}
+              disabled={isSubmitting}
+            />
+            <button
+              type="button"
+              onClick={handleAddDate}
+              disabled={isSubmitting || !newDateInput.trim()}
+              style={{
+                padding: '6px 12px',
+                backgroundColor: isSubmitting || !newDateInput.trim() ? '#9ca3af' : '#6483d1',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: isSubmitting || !newDateInput.trim() ? 'not-allowed' : 'pointer',
+                fontSize: '13px',
+                fontWeight: '500'
+              }}
+            >
+              추가
+            </button>
+          </div>
+          {additionalDates.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+              {additionalDates.map((date, idx) => (
+                <span
+                  key={idx}
+                  style={{
+                    padding: '4px 10px',
+                    backgroundColor: '#dbeafe',
+                    color: '#1e40af',
+                    borderRadius: '4px',
+                    fontSize: '12px',
+                    fontWeight: '500',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  {date}
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveDate(date)}
+                    disabled={isSubmitting}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#1e40af',
+                      cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                      fontSize: '14px',
+                      padding: '0',
+                      lineHeight: '1',
+                      fontWeight: 'bold'
+                    }}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+        
         <form onSubmit={handleSubmit}>
           <textarea
             value={question}
@@ -890,13 +1052,51 @@ function App() {
         {/* (Merged) 최근 생성된 보고서 사이드바 */}
         <div className={`saved-list-sidebar ${savedOpen ? '' : 'closed'}`}>
           
-          {/* (from HEAD logic) 사이드바 상단 토글 버튼 */}
-          <button 
-            className="saved-toggle-btn"
-            onClick={() => setSavedOpen(!savedOpen)}
-          >
-            {savedOpen ? '◀' : '▶'}
-          </button>
+          {/* 사이드바 상단 버튼들 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+            {/* 새 보고서 작성 버튼 */}
+            <button
+              onClick={() => {
+                setResponse(null);
+                setCurrentStep(1);
+                setOrganizationName('');
+                setUserCommand('');
+                setSelectedMonth('');
+                setReportType('user');
+                setError('');
+              }}
+              style={{
+                flex: 1,
+                padding: '10px 16px',
+                backgroundColor: '#6483d1',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                fontWeight: '500',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+                transition: 'background-color 0.2s'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#5a73b8'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#6483d1'}
+            >
+              <FontAwesomeIcon icon={faFileLines} />
+              새 보고서 작성
+            </button>
+            
+            {/* 사이드바 토글 버튼 */}
+            <button 
+              className="saved-toggle-btn"
+              onClick={() => setSavedOpen(!savedOpen)}
+              style={{ flexShrink: 0 }}
+            >
+              {savedOpen ? '◀' : '▶'}
+            </button>
+          </div>
 
           <div className="saved-content">
             <h3 className="saved-title">최근 생성된 보고서</h3>
@@ -938,14 +1138,80 @@ function App() {
           </div>
         </div>
 
-        {/* (from Incoming) 사이드바 열기 버튼 (닫혔을 때) */}
+        {/* 사이드바 열기 버튼 및 새 보고서 작성 버튼 (닫혔을 때) */}
         {!savedOpen && (
-          <button 
-            className="saved-toggle-btn-external"
-            onClick={() => setSavedOpen(!savedOpen)}
-          >
-            ▶
-          </button>
+          <div style={{ 
+            position: 'fixed', 
+            right: '0', 
+            top: '20px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px',
+            zIndex: 1000,
+            alignItems: 'flex-end',
+            pointerEvents: 'none'
+          }}>
+            <button
+              onClick={() => {
+                setResponse(null);
+                setCurrentStep(1);
+                setOrganizationName('');
+                setUserCommand('');
+                setSelectedMonth('');
+                setReportType('user');
+                setError('');
+              }}
+              style={{
+                padding: '12px 16px',
+                backgroundColor: '#6483d1',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px 0 0 6px',
+                cursor: 'pointer',
+                fontSize: '13px',
+                fontWeight: '500',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                transition: 'background-color 0.2s',
+                whiteSpace: 'nowrap',
+                pointerEvents: 'auto'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#5a73b8'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#6483d1'}
+              title="새 보고서 작성"
+            >
+              <FontAwesomeIcon icon={faFileLines} />
+              새 보고서
+            </button>
+            <button 
+              onClick={() => setSavedOpen(!savedOpen)}
+              style={{
+                padding: '10px 12px',
+                backgroundColor: '#f3f4f6',
+                color: '#374151',
+                border: '1px solid #d1d5db',
+                borderRadius: '6px 0 0 6px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                fontWeight: '500',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                transition: 'background-color 0.2s',
+                pointerEvents: 'auto',
+                minWidth: '40px',
+                minHeight: '40px'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#e5e7eb'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#f3f4f6'}
+              title="사이드바 열기"
+            >
+              ▶
+            </button>
+          </div>
         )}
 
         {/* 오류 메시지 */}
@@ -977,12 +1243,54 @@ function App() {
                 월별 연령대별 성별 비율
               </h3>
               {response.chart_data?.age_gender_ratio && response.chart_data.age_gender_ratio.length > 0 ? (
-                response.chart_data.age_gender_ratio.map((data, idx) => (
-                  <AgeGenderChart 
-                    key={idx} 
-                    data={data}
-                  />
-                ))
+                (() => {
+                  // 여러 날짜 분석인 경우 날짜별로 차트 표시
+                  const analysisDates = response.analysis_target_dates || [];
+                  const isMultiDate = analysisDates.length > 1;
+                  
+                  if (isMultiDate && analysisDates.length > 0) {
+                    // 날짜별로 차트 데이터 필터링
+                    return analysisDates.map((dateStr, dateIdx) => {
+                      // YYYY-MM 형식을 YYYYMM 형식으로 변환
+                      const targetYm = dateStr.replace('-', '');
+                      const dateChartData = response.chart_data.age_gender_ratio.filter(
+                        (item: any) => item.cri_ym === targetYm
+                      );
+                      
+                      // 날짜 포맷팅 (예: "2025-01" -> "2025년 1월")
+                      const [year, month] = dateStr.split('-');
+                      const formattedDate = `${year}년 ${parseInt(month)}월`;
+                      
+                      return (
+                        <div key={dateIdx} style={{ marginBottom: dateIdx < analysisDates.length - 1 ? '40px' : '0', paddingBottom: dateIdx < analysisDates.length - 1 ? '30px' : '0', borderBottom: dateIdx < analysisDates.length - 1 ? '2px solid #e5e7eb' : 'none' }}>
+                          <h4 style={{ marginBottom: '15px', fontSize: '16px', fontWeight: '600', color: '#374151' }}>
+                            {formattedDate}
+                          </h4>
+                          {dateChartData.length > 0 ? (
+                            dateChartData.map((data: any, idx: number) => (
+                              <AgeGenderChart 
+                                key={`${dateIdx}-${idx}`} 
+                                data={data}
+                              />
+                            ))
+                          ) : (
+                            <div style={{ padding: '20px', textAlign: 'center', color: '#666' }}>
+                              <p>{formattedDate} 데이터가 없습니다.</p>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    });
+                  } else {
+                    // 단일 날짜 또는 날짜 정보가 없는 경우 기존 로직 유지
+                    return response.chart_data.age_gender_ratio.map((data: any, idx: number) => (
+                      <AgeGenderChart 
+                        key={idx} 
+                        data={data}
+                      />
+                    ));
+                  }
+                })()
               ) : (
                 <div style={{ padding: '20px', textAlign: 'center', color: '#666' }}>
                   <p>차트 데이터가 없습니다.</p>
@@ -1091,6 +1399,7 @@ function App() {
             {/* 하위 보고서 질문창 */}
             <ReportQuestionForm 
               parentReportId={response.id}
+              parentDates={response.analysis_target_dates || null}
               onCreateChildReport={handleCreateChildReport}
             />
 

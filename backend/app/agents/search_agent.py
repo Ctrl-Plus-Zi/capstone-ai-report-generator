@@ -95,6 +95,10 @@ def create_search_agent(llm, toolkit):
         request_context = state.get("request_context", {})
         messages: List = list(state.get("messages", []))
         
+        # 날짜 정보 추출
+        analysis_target_dates = request_context.get("analysis_target_dates", [])
+        is_multi_date_analysis = request_context.get("is_multi_date_analysis", False)
+        
         # 기관별 사용 가능한 도구 필터링
         org = (request_context.get("organization_name") or "").strip().lower()
         
@@ -317,43 +321,76 @@ def create_search_agent(llm, toolkit):
                     if "chart_data" in tool_result and tool_result["chart_data"]:
                         tool_name_attr = getattr(toolkit.get_monthly_age_gender_ratio_data, "name", "get_monthly_age_gender_ratio_data")
                         if tool_name == tool_name_attr:
-                            chart_data_value = tool_result["chart_data"]
-                            if chart_data_value:  # 빈 리스트가 아닌 경우만
-                                # 특정 월을 요청한 경우 해당 월만 필터링
-                                requested_year = tool_args.get("year")
-                                requested_month = tool_args.get("month")
-                                
-                                if requested_year and requested_month:
-                                    # 특정 년월을 요청한 경우 해당 월만 필터링
-                                    target_ym = f"{requested_year}{requested_month:02d}"
-                                    filtered_data = [item for item in chart_data_value if item.get("cri_ym") == target_ym]
-                                    if filtered_data:
-                                        chart_data["age_gender_ratio"] = filtered_data
-                                        logger.info(f"차트 데이터 저장 완료: {requested_year}년 {requested_month}월 데이터 (필터링: {len(chart_data_value)}개월 → {len(filtered_data)}개월)")
-                                    else:
-                                        logger.warning(f"요청한 {requested_year}년 {requested_month}월 데이터가 없습니다.")
-                                        chart_data["age_gender_ratio"] = []
-                                else:
-                                    # 전체 기간을 요청한 경우, 기존 데이터와 병합 (중복 제거)
-                                    existing_data = chart_data.get("age_gender_ratio", [])
-                                    existing_yms = {item.get("cri_ym") for item in existing_data if item.get("cri_ym")}
-                                    
-                                    new_data = []
-                                    for item in chart_data_value:
-                                        cri_ym = item.get("cri_ym")
-                                        if cri_ym and cri_ym not in existing_yms:
-                                            new_data.append(item)
-                                            existing_yms.add(cri_ym)
-                                    
-                                    if new_data:
-                                        chart_data["age_gender_ratio"] = existing_data + new_data
-                                        logger.info(f"차트 데이터 병합 완료: 기존 {len(existing_data)}개월 + 신규 {len(new_data)}개월 = 총 {len(chart_data['age_gender_ratio'])}개월")
-                                    else:
-                                        # 중복이 없으면 그대로 저장
-                                        chart_data["age_gender_ratio"] = chart_data_value
-                                        logger.info(f"차트 데이터 저장 완료: {len(chart_data_value)}개월 데이터")
+                            # 여러 날짜 분석인 경우, 자동 호출에서 이미 처리했으므로 LLM 호출 결과는 무시
+                            if is_multi_date_analysis:
+                                logger.info("여러 날짜 분석 모드: 자동 호출에서 이미 처리된 차트 데이터가 있으므로 LLM 호출 결과는 무시합니다.")
                             else:
-                                logger.warning("차트 데이터가 비어있습니다.")
+                                chart_data_value = tool_result["chart_data"]
+                                if chart_data_value:  # 빈 리스트가 아닌 경우만
+                                    # 특정 월을 요청한 경우 해당 월만 필터링
+                                    requested_year = tool_args.get("year")
+                                    requested_month = tool_args.get("month")
+                                    
+                                    if requested_year and requested_month:
+                                        # 특정 년월을 요청한 경우 해당 월만 필터링
+                                        target_ym = f"{requested_year}{requested_month:02d}"
+                                        filtered_data = [item for item in chart_data_value if item.get("cri_ym") == target_ym]
+                                        if filtered_data:
+                                            # 기존 데이터가 있으면 병합 (중복 제거)
+                                            existing_data = chart_data.get("age_gender_ratio", [])
+                                            existing_yms = {item.get("cri_ym") for item in existing_data if item.get("cri_ym")}
+                                            
+                                            new_data = [item for item in filtered_data if item.get("cri_ym") not in existing_yms]
+                                            if new_data:
+                                                chart_data["age_gender_ratio"] = existing_data + new_data
+                                                logger.info(f"차트 데이터 저장 완료: {requested_year}년 {requested_month}월 데이터 (필터링: {len(chart_data_value)}개월 → {len(filtered_data)}개월, 병합: {len(existing_data)}개월 + {len(new_data)}개월)")
+                                            elif filtered_data[0].get("cri_ym") in existing_yms:
+                                                logger.info(f"차트 데이터 중복: {requested_year}년 {requested_month}월 데이터는 이미 존재합니다.")
+                                            else:
+                                                chart_data["age_gender_ratio"] = filtered_data
+                                                logger.info(f"차트 데이터 저장 완료: {requested_year}년 {requested_month}월 데이터 (필터링: {len(chart_data_value)}개월 → {len(filtered_data)}개월)")
+                                        else:
+                                            logger.warning(f"요청한 {requested_year}년 {requested_month}월 데이터가 없습니다.")
+                                    else:
+                                        # 전체 기간을 요청한 경우, analysis_target_dates에 해당하는 데이터만 필터링
+                                        if analysis_target_dates and len(analysis_target_dates) > 0:
+                                            # analysis_target_dates에 해당하는 데이터만 필터링
+                                            target_yms = {date_str.replace('-', '') for date_str in analysis_target_dates}
+                                            filtered_data = [item for item in chart_data_value if item.get("cri_ym") in target_yms]
+                                            
+                                            if filtered_data:
+                                                # 기존 데이터와 병합 (중복 제거)
+                                                existing_data = chart_data.get("age_gender_ratio", [])
+                                                existing_yms = {item.get("cri_ym") for item in existing_data if item.get("cri_ym")}
+                                                
+                                                new_data = [item for item in filtered_data if item.get("cri_ym") not in existing_yms]
+                                                if new_data:
+                                                    chart_data["age_gender_ratio"] = existing_data + new_data
+                                                    logger.info(f"차트 데이터 필터링 및 병합 완료: {len(chart_data_value)}개월 → {len(filtered_data)}개월 (필터링), 기존 {len(existing_data)}개월 + 신규 {len(new_data)}개월 = 총 {len(chart_data['age_gender_ratio'])}개월")
+                                                else:
+                                                    logger.info(f"차트 데이터 중복: 필터링된 {len(filtered_data)}개월 데이터는 이미 존재합니다.")
+                                            else:
+                                                logger.warning(f"analysis_target_dates {analysis_target_dates}에 해당하는 데이터가 없습니다.")
+                                        else:
+                                            # analysis_target_dates가 없으면 기존 로직 유지
+                                            existing_data = chart_data.get("age_gender_ratio", [])
+                                            existing_yms = {item.get("cri_ym") for item in existing_data if item.get("cri_ym")}
+                                            
+                                            new_data = []
+                                            for item in chart_data_value:
+                                                cri_ym = item.get("cri_ym")
+                                                if cri_ym and cri_ym not in existing_yms:
+                                                    new_data.append(item)
+                                                    existing_yms.add(cri_ym)
+                                            
+                                            if new_data:
+                                                chart_data["age_gender_ratio"] = existing_data + new_data
+                                                logger.info(f"차트 데이터 병합 완료: 기존 {len(existing_data)}개월 + 신규 {len(new_data)}개월 = 총 {len(chart_data['age_gender_ratio'])}개월")
+                                            else:
+                                                chart_data["age_gender_ratio"] = chart_data_value
+                                                logger.info(f"차트 데이터 저장 완료: {len(chart_data_value)}개월 데이터")
+                                else:
+                                    logger.warning("차트 데이터가 비어있습니다.")
                     
                     # 평점 통계 데이터 추출
                     if "rating_statistics" in tool_result and tool_result["rating_statistics"]:
@@ -488,56 +525,168 @@ def create_search_agent(llm, toolkit):
 
                     # 날씨 API 제거됨
 
-        # 필수 DB 데이터 자동 호출 (LLM이 호출하지 않은 경우)
+        # 필수 DB 데이터 자동 호출
         # 1. 연령대별 성별 비율 데이터 자동 호출
-        if not age_gender_called:
-            logger.info("연령대별 성별 비율 데이터 자동 호출 시작")
+        # 여러 날짜 분석 모드에서는 LLM이 호출했더라도 자동 호출 실행 (정확한 날짜별 데이터 수집을 위해)
+        if not age_gender_called or (is_multi_date_analysis and analysis_target_dates):
+            if is_multi_date_analysis and analysis_target_dates:
+                logger.info(f"여러 날짜 분석 모드: 연령대별 성별 비율 데이터 자동 호출 시작 ({len(analysis_target_dates)}개 날짜)")
+            else:
+                logger.info("연령대별 성별 비율 데이터 자동 호출 시작")
             try:
-                # 질문에서 년월 추출
-                user_text = " ".join([m.content for m in messages if getattr(m, "content", None)])
-                year, month = _extract_year_month(user_text)
-                
-                # request_context에서도 년월 확인
-                if not year or not month:
-                    year = request_context.get("current_year")
-                    month = request_context.get("current_month")
-                
-                age_gender_args = {
-                    "organization_name": org,
-                    "year": year,
-                    "month": month,
-                }
-                
-                age_gender_result = toolkit.get_monthly_age_gender_ratio_data.invoke(age_gender_args)
-                called_tools.append(getattr(toolkit.get_monthly_age_gender_ratio_data, "name", "get_monthly_age_gender_ratio_data"))
-                
-                if isinstance(age_gender_result, dict):
-                    notes = age_gender_result.get("notes", "")
-                    if notes:
-                        note_entry = f"- {notes} (자동 호출)"
-                        research_notes = f"{research_notes}\n{note_entry}".strip() if research_notes else note_entry
+                # 여러 날짜 분석인 경우 각 날짜별로 호출
+                if is_multi_date_analysis and analysis_target_dates:
+                    logger.info(f"여러 날짜 분석 모드: {len(analysis_target_dates)}개 날짜 처리")
+                    all_chart_data = []
                     
-                    # 차트 데이터 즉시 저장
-                    if "chart_data" in age_gender_result and age_gender_result["chart_data"]:
-                        chart_data_value = age_gender_result["chart_data"]
-                        if chart_data_value:
-                            # 특정 월을 요청한 경우 해당 월만 필터링
-                            if year and month:
-                                # 특정 년월을 요청한 경우 해당 월만 필터링
-                                target_ym = f"{year}{month:02d}"
-                                filtered_data = [item for item in chart_data_value if item.get("cri_ym") == target_ym]
-                                if filtered_data:
-                                    chart_data["age_gender_ratio"] = filtered_data
-                                    logger.info(f"차트 데이터 자동 저장 완료: {year}년 {month}월 데이터 (필터링: {len(chart_data_value)}개월 → {len(filtered_data)}개월)")
-                                else:
-                                    logger.warning(f"요청한 {year}년 {month}월 데이터가 없습니다.")
-                                    chart_data["age_gender_ratio"] = []
-                            else:
-                                # 전체 기간을 요청한 경우 그대로 저장
-                                chart_data["age_gender_ratio"] = chart_data_value
-                                logger.info(f"차트 데이터 자동 저장 완료: {len(chart_data_value)}개월 데이터")
+                    for date_str in analysis_target_dates:
+                        try:
+                            # "YYYY-MM" 형식 파싱
+                            parts = date_str.split("-")
+                            if len(parts) == 2:
+                                year = int(parts[0])
+                                month = int(parts[1])
+                                
+                                age_gender_args = {
+                                    "organization_name": org,
+                                    "year": year,
+                                    "month": month,
+                                }
+                                
+                                age_gender_result = toolkit.get_monthly_age_gender_ratio_data.invoke(age_gender_args)
+                                
+                                if isinstance(age_gender_result, dict):
+                                    notes = age_gender_result.get("notes", "")
+                                    if notes:
+                                        note_entry = f"- {notes} ({date_str}, 자동 호출)"
+                                        research_notes = f"{research_notes}\n{note_entry}".strip() if research_notes else note_entry
+                                    
+                                    # 차트 데이터 수집 (날짜별로 구분)
+                                    if "chart_data" in age_gender_result and age_gender_result["chart_data"]:
+                                        chart_data_value = age_gender_result["chart_data"]
+                                        if chart_data_value:
+                                            target_ym = f"{year}{month:02d}"
+                                            filtered_data = [item for item in chart_data_value if item.get("cri_ym") == target_ym]
+                                            if filtered_data:
+                                                all_chart_data.extend(filtered_data)
+                                                logger.info(f"차트 데이터 수집 완료: {date_str} ({len(filtered_data)}개월)")
+                                            else:
+                                                logger.warning(f"{date_str} 데이터가 없습니다.")
+                        except Exception as e:
+                            logger.error(f"{date_str} 날짜 처리 실패: {e}", exc_info=True)
+                            continue
+                    
+                    # 모든 날짜의 데이터를 하나의 배열로 저장
+                    if all_chart_data:
+                        # 기존 데이터가 있으면 병합 (중복 제거)
+                        existing_data = chart_data.get("age_gender_ratio", [])
+                        existing_yms = {item.get("cri_ym") for item in existing_data if item.get("cri_ym")}
+                        
+                        new_data = [item for item in all_chart_data if item.get("cri_ym") not in existing_yms]
+                        if new_data:
+                            chart_data["age_gender_ratio"] = existing_data + new_data
+                            logger.info(f"여러 날짜 차트 데이터 저장 완료: 기존 {len(existing_data)}개월 + 신규 {len(new_data)}개월 = 총 {len(chart_data['age_gender_ratio'])}개월")
                         else:
-                            logger.warning("차트 데이터가 비어있습니다.")
+                            chart_data["age_gender_ratio"] = all_chart_data
+                            logger.info(f"여러 날짜 차트 데이터 저장 완료: 총 {len(all_chart_data)}개월")
+                    else:
+                        # 기존 데이터가 있으면 유지, 없으면 빈 배열
+                        if not chart_data.get("age_gender_ratio"):
+                            chart_data["age_gender_ratio"] = []
+                        logger.warning("여러 날짜 분석에서 차트 데이터를 수집하지 못했습니다.")
+                    
+                    called_tools.append(getattr(toolkit.get_monthly_age_gender_ratio_data, "name", "get_monthly_age_gender_ratio_data"))
+                else:
+                    # 단일 날짜 분석 (기존 로직)
+                    year, month = None, None
+                    
+                    # 우선순위: analysis_target_dates > 질문에서 추출 > 현재 날짜
+                    if analysis_target_dates and len(analysis_target_dates) > 0:
+                        # analysis_target_dates에서 첫 번째 날짜 사용 (가장 정확함)
+                        date_str = analysis_target_dates[0]
+                        parts = date_str.split("-")
+                        if len(parts) == 2:
+                            year = int(parts[0])
+                            month = int(parts[1])
+                            logger.info(f"analysis_target_dates에서 날짜 추출: {year}년 {month}월")
+                    
+                    # analysis_target_dates가 없으면 질문에서 년월 추출
+                    if not year or not month:
+                        user_text = " ".join([m.content for m in messages if getattr(m, "content", None)])
+                        year, month = _extract_year_month(user_text)
+                        if year and month:
+                            logger.info(f"질문에서 날짜 추출: {year}년 {month}월")
+                    
+                    # 여전히 없으면 현재 날짜 사용
+                    if not year or not month:
+                        year = request_context.get("current_year")
+                        month = request_context.get("current_month")
+                        logger.info(f"현재 날짜 사용: {year}년 {month}월")
+                    
+                    age_gender_args = {
+                        "organization_name": org,
+                        "year": year,
+                        "month": month,
+                    }
+                    
+                    age_gender_result = toolkit.get_monthly_age_gender_ratio_data.invoke(age_gender_args)
+                    called_tools.append(getattr(toolkit.get_monthly_age_gender_ratio_data, "name", "get_monthly_age_gender_ratio_data"))
+                    
+                    if isinstance(age_gender_result, dict):
+                        notes = age_gender_result.get("notes", "")
+                        if notes:
+                            note_entry = f"- {notes} (자동 호출)"
+                            research_notes = f"{research_notes}\n{note_entry}".strip() if research_notes else note_entry
+                        
+                        # 차트 데이터 즉시 저장
+                        if "chart_data" in age_gender_result and age_gender_result["chart_data"]:
+                            chart_data_value = age_gender_result["chart_data"]
+                            if chart_data_value:
+                                # analysis_target_dates가 있으면 해당 날짜만 필터링 (우선순위 1)
+                                if analysis_target_dates and len(analysis_target_dates) > 0:
+                                    # analysis_target_dates에 해당하는 데이터만 필터링
+                                    target_yms = {date_str.replace('-', '') for date_str in analysis_target_dates}
+                                    filtered_data = [item for item in chart_data_value if item.get("cri_ym") in target_yms]
+                                    
+                                    if filtered_data:
+                                        # 기존 데이터와 병합 (중복 제거)
+                                        existing_data = chart_data.get("age_gender_ratio", [])
+                                        existing_yms = {item.get("cri_ym") for item in existing_data if item.get("cri_ym")}
+                                        
+                                        new_data = [item for item in filtered_data if item.get("cri_ym") not in existing_yms]
+                                        if new_data:
+                                            chart_data["age_gender_ratio"] = existing_data + new_data
+                                            logger.info(f"차트 데이터 필터링 및 병합 완료: {len(chart_data_value)}개월 → {len(filtered_data)}개월 (필터링), 기존 {len(existing_data)}개월 + 신규 {len(new_data)}개월 = 총 {len(chart_data['age_gender_ratio'])}개월")
+                                        else:
+                                            chart_data["age_gender_ratio"] = filtered_data
+                                            logger.info(f"차트 데이터 필터링 완료: {len(chart_data_value)}개월 → {len(filtered_data)}개월 (analysis_target_dates 기준)")
+                                    else:
+                                        logger.warning(f"analysis_target_dates {analysis_target_dates}에 해당하는 데이터가 없습니다.")
+                                        chart_data["age_gender_ratio"] = []
+                                elif year and month:
+                                    # 특정 년월을 요청한 경우 해당 월만 필터링 (우선순위 2)
+                                    target_ym = f"{year}{month:02d}"
+                                    filtered_data = [item for item in chart_data_value if item.get("cri_ym") == target_ym]
+                                    if filtered_data:
+                                        # 기존 데이터와 병합 (중복 제거)
+                                        existing_data = chart_data.get("age_gender_ratio", [])
+                                        existing_yms = {item.get("cri_ym") for item in existing_data if item.get("cri_ym")}
+                                        
+                                        if target_ym not in existing_yms:
+                                            chart_data["age_gender_ratio"] = existing_data + filtered_data
+                                            logger.info(f"차트 데이터 자동 저장 완료: {year}년 {month}월 데이터 (필터링: {len(chart_data_value)}개월 → {len(filtered_data)}개월, 병합: {len(existing_data)}개월 + {len(filtered_data)}개월)")
+                                        else:
+                                            logger.info(f"차트 데이터 중복: {year}년 {month}월 데이터는 이미 존재합니다.")
+                                    else:
+                                        logger.warning(f"요청한 {year}년 {month}월 데이터가 없습니다.")
+                                        chart_data["age_gender_ratio"] = []
+                                else:
+                                    # year, month가 없고 analysis_target_dates도 없으면 전체 데이터 저장하지 않음
+                                    logger.warning("year, month, analysis_target_dates가 모두 없어서 차트 데이터를 저장하지 않습니다.")
+                                    if not chart_data.get("age_gender_ratio"):
+                                        chart_data["age_gender_ratio"] = []
+                            else:
+                                logger.warning("차트 데이터가 비어있습니다.")
                     
                     # ToolMessage는 추가하지 않음 (데이터는 state에 저장되므로 분석 에이전트가 state에서 읽음)
                     # 잘못된 tool_call_id로 인한 OpenAI API 에러 방지
