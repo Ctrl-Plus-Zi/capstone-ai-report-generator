@@ -118,16 +118,27 @@ def _calculate_demographics_stats(demographics: List[Dict]) -> Dict[str, Any]:
     age_stats = {}
     gender_stats = {"male": 0, "female": 0}
     
-    # LG U+ lguplus_dpg_api_tot 형식: m_20, f_20, ...
+    # LG U+ lguplus_dpg_api_tot 형식: m_20, f_20, ... (방문자 수 → 비율로 변환)
     if "m_20" in data:
-        logger.info(f"[QUERY_EXECUTOR] LG U+ API 형식 감지 (m_20, f_20...)")
-        age_groups = ["20", "30", "40", "50", "60", "70"]
+        logger.info(f"[QUERY_EXECUTOR] LG U+ API 형식 감지 (m_20, f_20... 방문자 수)")
+        age_groups = ["00", "10", "20", "30", "40", "50", "60", "70"]
+        
+        # 전체 합계 계산
+        total = 0
         for age in age_groups:
-            male_val = float(data.get(f"m_{age}", 0) or 0)
-            female_val = float(data.get(f"f_{age}", 0) or 0)
-            age_stats[f"{age}대"] = round(male_val + female_val, 1)
-            gender_stats["male"] += male_val
-            gender_stats["female"] += female_val
+            total += float(data.get(f"m_{age}", 0) or 0)
+            total += float(data.get(f"f_{age}", 0) or 0)
+        
+        if total > 0:
+            # 20대 이상만 비율 계산
+            for age in ["20", "30", "40", "50", "60", "70"]:
+                male_val = float(data.get(f"m_{age}", 0) or 0) / total * 100
+                female_val = float(data.get(f"f_{age}", 0) or 0) / total * 100
+                age_stats[f"{age}대"] = round(male_val + female_val, 1)
+                gender_stats["male"] += male_val
+                gender_stats["female"] += female_val
+        else:
+            logger.warning(f"[QUERY_EXECUTOR] LG U+ 데이터 총합이 0")
     
     # 삼성카드 mrcno_demographics 형식: mrcno_pct_20_male, ...
     elif "mrcno_pct_20_male" in data:

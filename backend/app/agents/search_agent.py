@@ -2,10 +2,11 @@
 Search Agent - 데이터 수집 에이전트
 
 워크플로우:
-    1. DB 쿼리 계획 생성 (LLM)
-    2. API 도구 선택 (LLM)
+    1. DB 쿼리 계획 생성 (LLM) + 계획 설명 저장
+    2. API 도구 선택 (LLM) + 호출 이유 저장
     3. DB 쿼리 실행 (기본 계획 + LLM 생성 쿼리)
     4. API 호출 실행
+    5. 계획 설명 + 실행 결과를 research_payload에 저장
 """
 from __future__ import annotations
 import re
@@ -167,8 +168,8 @@ def create_search_agent(llm, toolkit):
                 - 이전 쿼리 결과 참조: "{{{{save_as}}}}.{{{{column}}}}" 형식
                 
                 # 지시
-                execute_data_queries를 호출하여 queries 배열에 쿼리를 담아 전달하라.
-                텍스트로 설명하지 말고 도구만 호출하라.
+                1. 먼저 왜 이 쿼리들이 필요한지 간단히 설명하라 (1-2문장).
+                2. 그 다음 execute_data_queries를 호출하여 queries 배열에 쿼리를 담아 전달하라.
             """).strip()),
             ("human", f"'{org_name}' 보고서 작성에 필요한 모든 데이터를 DB에서 가져오기 위한 쿼리를 작성하고 execute_data_queries를 호출하라.")
         ])
@@ -213,6 +214,13 @@ def create_search_agent(llm, toolkit):
         
         llm_queries: List[Dict[str, Any]] = []
         llm_stats: List[str] = []
+        db_plan_reasoning: str = ""  # LLM의 DB 계획 설명
+        
+        # LLM 응답에서 텍스트 설명 추출
+        if db_response and hasattr(db_response, "content") and db_response.content:
+            db_plan_reasoning = db_response.content.strip()
+            if db_plan_reasoning:
+                logger.info(f"[SEARCH_AGENT] [단계1] DB 계획 설명: {db_plan_reasoning[:200]}...")
         
         if db_response and hasattr(db_response, "tool_calls") and db_response.tool_calls:
             for call in db_response.tool_calls:
@@ -270,10 +278,11 @@ def create_search_agent(llm, toolkit):
                 - search_performance_info_api: 공연 정보 검색 (공연장, 콘서트홀용)
                 
                 # 지시사항
-                기관 유형에 맞는 API를 선택하여 호출하세요.
-                - 미술관/박물관/갤러리: search_exhibition_info_api
-                - 박물관 소장품: search_museum_collection_api  
-                - 공연장/콘서트홀: search_performance_info_api
+                1. 먼저 왜 이 API를 선택했는지 간단히 설명하세요 (1-2문장).
+                2. 기관 유형에 맞는 API를 선택하여 호출하세요.
+                   - 미술관/박물관/갤러리: search_exhibition_info_api
+                   - 박물관 소장품: search_museum_collection_api  
+                   - 공연장/콘서트홀: search_performance_info_api
                 
                 keyword 파라미터에 기관명을 넣으세요.
             """).strip()),
@@ -290,11 +299,20 @@ def create_search_agent(llm, toolkit):
             api_response = None
         
         api_calls: List[Dict[str, Any]] = []
+        api_plan_reasoning: str = ""  # LLM의 API 선택 이유
+        
+        # LLM 응답에서 텍스트 설명 추출
+        if api_response and hasattr(api_response, "content") and api_response.content:
+            api_plan_reasoning = api_response.content.strip()
+            if api_plan_reasoning:
+                logger.info(f"[SEARCH_AGENT] [단계2] API 선택 이유: {api_plan_reasoning[:200]}...")
+        
         if api_response and hasattr(api_response, "tool_calls") and api_response.tool_calls:
             for call in api_response.tool_calls:
                 api_calls.append({
                     "name": call.get("name"),
-                    "args": call.get("args", {})
+                    "args": call.get("args", {}),
+                    "reasoning": api_plan_reasoning  # 각 API 호출에 이유 저장
                 })
             logger.info(f"[SEARCH_AGENT] [단계2] API 계획: {[c['name'] for c in api_calls]}")
         else:
@@ -317,7 +335,8 @@ def create_search_agent(llm, toolkit):
                             "tool": f"execute_data_queries.{key}",
                             "count": value["count"],
                             "sample": value.get("sample", []),
-                            "data": value.get("sample", [])  # Analyse Agent용
+                            "data": value.get("sample", []),  # Analyse Agent용
+                            "reasoning": db_plan_reasoning  # 수집 이유/계획 설명
                         })
                         logger.info(f"[SEARCH_AGENT] [단계3] {key}: {value['count']}개 추가")
                 
@@ -325,7 +344,8 @@ def create_search_agent(llm, toolkit):
                 if stats:
                     research_payload.append({
                         "tool": "calculated_stats",
-                        "stats": stats
+                        "stats": stats,
+                        "reasoning": "리뷰 평점 분포와 방문자 인구통계를 분석하기 위해 자동 계산된 통계입니다."
                     })
                     logger.info(f"[SEARCH_AGENT] [단계3] 통계 추가: {list(stats.keys())}")
                 
@@ -376,7 +396,8 @@ def create_search_agent(llm, toolkit):
                             "tool": tool_name,
                             "count": len(data),
                             "sample": data[:5],
-                            "data": data
+                            "data": data,
+                            "reasoning": api_call.get("reasoning", "")  # API 호출 이유
                         })
                         logger.info(f"[SEARCH_AGENT] [단계4] {tool_name}: {len(data)}개 결과")
                         

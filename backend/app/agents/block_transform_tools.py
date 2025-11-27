@@ -10,15 +10,14 @@ from langchain_core.tools import tool
 
 @tool
 def transform_demographics_to_age_chart(
-    demographics_data: Annotated[List[Dict[str, Any]], "mrcno_demographics 또는 persona_metrics 테이블에서 조회한 데이터 리스트"]
+    demographics_data: Annotated[List[Dict[str, Any]], "mrcno_demographics, persona_metrics, 또는 lguplus_dpg_api_tot 테이블에서 조회한 데이터 리스트"]
 ) -> dict:
     """인구통계 데이터를 연령대별 방문자 분포 도넛 차트로 변환합니다.
     
-    입력 데이터 예시 (mrcno_demographics):
-    [{"mrcno_pct_20_male": 10.5, "mrcno_pct_20_female": 12.3, ...}]
-    
-    또는 (persona_metrics):
-    [{"persona_pct_20_male": 10.5, "persona_pct_20_female": 12.3, ...}]
+    지원 형식:
+    - mrcno_demographics: mrcno_pct_20_male, mrcno_pct_20_female, ...
+    - persona_metrics: persona_pct_20_male, persona_pct_20_female, ...
+    - lguplus_dpg_api_tot: m_20, f_20, ... (방문자 수 → 비율 변환)
     
     Returns:
         연령대별 분포 차트 블록 (doughnut)
@@ -35,23 +34,32 @@ def transform_demographics_to_age_chart(
     # 첫 번째 레코드 사용 (또는 평균 계산)
     data = demographics_data[0] if len(demographics_data) == 1 else _average_demographics(demographics_data)
     
-    # 컬럼 접두사 자동 감지 (mrcno_pct_ 또는 persona_pct_)
-    prefix = "mrcno_pct_" if "mrcno_pct_20_male" in data else "persona_pct_"
-    
-    # 연령대별 합계 계산 (남+여)
-    age_groups = ["20", "30", "40", "50", "60", "70"]
     labels = ["20대", "30대", "40대", "50대", "60대", "70대 이상"]
     values = []
     
-    for age in age_groups:
-        male_key = f"{prefix}{age}_male"
-        female_key = f"{prefix}{age}_female"
-        male_val = float(data.get(male_key, 0) or 0)
-        female_val = float(data.get(female_key, 0) or 0)
-        values.append(round(male_val + female_val, 1))
+    # LG U+ 형식: m_20, f_20, ... (방문자 수)
+    if "m_20" in data:
+        age_groups = ["00", "10", "20", "30", "40", "50", "60", "70"]
+        total = sum(float(data.get(f"m_{age}", 0) or 0) + float(data.get(f"f_{age}", 0) or 0) for age in age_groups)
+        
+        if total > 0:
+            for age in ["20", "30", "40", "50", "60", "70"]:
+                male_val = float(data.get(f"m_{age}", 0) or 0) / total * 100
+                female_val = float(data.get(f"f_{age}", 0) or 0) / total * 100
+                values.append(round(male_val + female_val, 1))
+        else:
+            values = [0] * 6
+    
+    # 삼성카드/페르소나 형식
+    else:
+        prefix = "mrcno_pct_" if "mrcno_pct_20_male" in data else "persona_pct_"
+        for age in ["20", "30", "40", "50", "60", "70"]:
+            male_val = float(data.get(f"{prefix}{age}_male", 0) or 0) * 100
+            female_val = float(data.get(f"{prefix}{age}_female", 0) or 0) * 100
+            values.append(round(male_val + female_val, 1))
     
     # 가장 높은 연령대 찾기
-    max_idx = values.index(max(values)) if values else 0
+    max_idx = values.index(max(values)) if values and max(values) > 0 else 0
     max_age = labels[max_idx]
     max_val = values[max_idx]
     
@@ -66,7 +74,7 @@ def transform_demographics_to_age_chart(
 
 @tool
 def transform_demographics_to_gender_chart(
-    demographics_data: Annotated[List[Dict[str, Any]], "mrcno_demographics 또는 persona_metrics 테이블에서 조회한 데이터 리스트"]
+    demographics_data: Annotated[List[Dict[str, Any]], "mrcno_demographics, persona_metrics, 또는 lguplus_dpg_api_tot 테이블에서 조회한 데이터 리스트"]
 ) -> dict:
     """인구통계 데이터를 성별 방문자 분포 도넛 차트로 변환합니다.
     
@@ -85,20 +93,33 @@ def transform_demographics_to_gender_chart(
     # 첫 번째 레코드 사용 (또는 평균 계산)
     data = demographics_data[0] if len(demographics_data) == 1 else _average_demographics(demographics_data)
     
-    # 컬럼 접두사 자동 감지
-    prefix = "mrcno_pct_" if "mrcno_pct_20_male" in data else "persona_pct_"
-    
-    # 성별 합계 계산
-    age_groups = ["20", "30", "40", "50", "60", "70"]
     male_total = 0
     female_total = 0
     
-    for age in age_groups:
-        male_total += float(data.get(f"{prefix}{age}_male", 0) or 0)
-        female_total += float(data.get(f"{prefix}{age}_female", 0) or 0)
+    # LG U+ 형식: m_20, f_20, ... (방문자 수)
+    if "m_20" in data:
+        age_groups = ["00", "10", "20", "30", "40", "50", "60", "70"]
+        for age in age_groups:
+            male_total += float(data.get(f"m_{age}", 0) or 0)
+            female_total += float(data.get(f"f_{age}", 0) or 0)
+        
+        # 비율로 변환
+        total = male_total + female_total
+        if total > 0:
+            male_pct = round(male_total / total * 100, 1)
+            female_pct = round(female_total / total * 100, 1)
+        else:
+            male_pct, female_pct = 50, 50
     
-    male_pct = round(male_total, 1)
-    female_pct = round(female_total, 1)
+    # 삼성카드/페르소나 형식
+    else:
+        prefix = "mrcno_pct_" if "mrcno_pct_20_male" in data else "persona_pct_"
+        for age in ["20", "30", "40", "50", "60", "70"]:
+            male_total += float(data.get(f"{prefix}{age}_male", 0) or 0)
+            female_total += float(data.get(f"{prefix}{age}_female", 0) or 0)
+        
+        male_pct = round(male_total * 100, 1)
+        female_pct = round(female_total * 100, 1)
     
     # 더 높은 성별 확인
     if female_pct > male_pct:
