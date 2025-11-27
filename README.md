@@ -15,8 +15,49 @@
 
 ### 시스템 아키텍처
 
+#### 데이터 흐름 요약
+
+```mermaid
+flowchart LR
+    subgraph INPUT
+        U[사용자 요청<br/>기관명 + 주제]
+    end
+    
+    subgraph PROCESS
+        S[Search<br/>20+ 데이터]
+        A[Analyse<br/>30+ 블록]
+        C[Compose<br/>18+ 블록]
+    end
+    
+    subgraph OUTPUT
+        F[Frontend<br/>보고서 렌더링]
+    end
+    
+    U --> S --> A --> C --> F
+    
+    style INPUT fill:#e3f2fd
+    style PROCESS fill:#fff9c4
+    style OUTPUT fill:#ffccbc
 ```
-사용자 요청 → Search Agent → Analyse Agent → Compose Agent → Frontend 렌더링
+
+#### 전체 워크플로우
+
+```mermaid
+flowchart LR
+    A[사용자 요청] --> B[Search Agent]
+    B --> C[Analyse Agent]
+    C --> D[Compose Agent]
+    D --> E[Frontend]
+    
+    B --> |research_payload| C
+    C --> |block_drafts| D
+    D --> |blocks| E
+    
+    style A fill:#e3f2fd
+    style B fill:#fff8e1
+    style C fill:#f3e5f5
+    style D fill:#e8f5e9
+    style E fill:#fce4ec
 ```
 
 | 에이전트 | 역할 |
@@ -24,6 +65,91 @@
 | Search Agent | DB 쿼리 실행, KCISA API 호출, Google API 번들 실행 |
 | Analyse Agent | 데이터 분석, 차트/테이블/마크다운 블록 생성 |
 | Compose Agent | 블록 레이아웃 배치, 최종 보고서 구조 확정 |
+
+#### Search Agent 상세
+
+```mermaid
+flowchart TD
+    subgraph SEARCH["Search Agent"]
+        S1[단계 1: DB 쿼리 계획<br/>LLM + query_bundles.json]
+        S2[단계 2: API 선택<br/>KCISA API 결정]
+        S3[단계 3: DB 쿼리 실행<br/>Query Executor]
+        S4[단계 4: KCISA API 실행<br/>전시/공연 정보]
+        S5[단계 5: Google API 실행<br/>api_bundles.json]
+        
+        S1 --> S2 --> S3 --> S4 --> S5
+    end
+    
+    DB[(PostgreSQL)] -.-> S3
+    KCISA[/KCISA API/] -.-> S4
+    GOOGLE[/Google API/] -.-> S5
+    
+    S5 --> OUT[research_payload 출력]
+    
+    style SEARCH fill:#fff8e1
+```
+
+#### Analyse Agent 상세
+
+```mermaid
+flowchart TD
+    subgraph ANALYSE["Analyse Agent"]
+        A1[단계 1: 사전계산 통계<br/>→ 차트 블록 직접 생성]
+        A2[단계 1.5: Google API<br/>→ map/air_quality 블록]
+        A3[단계 1.6: KCISA API<br/>→ 테이블/이미지 블록]
+        A4[단계 2-6: LLM 도구 호출<br/>추가 블록 생성]
+        A5[단계 7: 블록 ID 부여]
+        A6[단계 8: 짝 마크다운 생성]
+        A7[단계 9: 총체적 분석 생성]
+        
+        A1 --> A2 --> A3 --> A4 --> A5 --> A6 --> A7
+    end
+    
+    IN[research_payload 입력] --> A1
+    A7 --> OUT[block_drafts 출력]
+    
+    style ANALYSE fill:#f3e5f5
+```
+
+#### 블록 생성 도구
+
+```mermaid
+flowchart LR
+    subgraph TOOLS["LLM 블록 생성 도구"]
+        T1[create_chart_block<br/>doughnut/bar/pie<br/>line/radar/polarArea]
+        T2[create_table_block]
+        T3[create_markdown_block]
+        T4[create_image_block]
+        T5[create_map_block]
+        T6[create_air_quality_block]
+    end
+    
+    LLM[LLM 도구 호출] --> TOOLS
+    TOOLS --> BLOCKS[블록 배열]
+    
+    style TOOLS fill:#e1bee7
+```
+
+#### Compose Agent 상세
+
+```mermaid
+flowchart TD
+    subgraph COMPOSE["Compose Agent"]
+        C1[블록 목록 수신<br/>30개+]
+        C2[LLM 레이아웃 결정]
+        C3[create_row_layout<br/>여러 번 호출]
+        C4[finalize_report_layout<br/>최종 확정]
+        C5[누락 블록 자동 추가]
+        C6[최종 blocks 생성<br/>18개+]
+        
+        C1 --> C2 --> C3 --> C4 --> C5 --> C6
+    end
+    
+    IN[block_drafts 입력] --> C1
+    C6 --> OUT[blocks 출력]
+    
+    style COMPOSE fill:#e8f5e9
+```
 
 ## 기술 스택
 
