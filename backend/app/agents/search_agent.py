@@ -116,8 +116,6 @@ def create_search_agent(llm, toolkit):
         report_topic = request_context.get("report_topic", "")
         current_date = request_context.get("current_date", "")
         
-        research_notes = state.get("research_notes", "")
-        research_sources = list(state.get("research_sources", []))
         research_payload = list(state.get("research_payload", []))
         latest_performance_image = state.get("latest_performance_image", "")
 
@@ -366,10 +364,6 @@ def create_search_agent(llm, toolkit):
                 tool_result = tool_fn.invoke(tool_args)
                 
                 if isinstance(tool_result, dict):
-                    sources = tool_result.get("sources", [])
-                    if sources:
-                        research_sources.extend(sources)
-                    
                     data = tool_result.get("data", [])
                     if data:
                         if current_date and tool_name in ["search_exhibition_info_api", "search_performance_info_api"]:
@@ -404,27 +398,8 @@ def create_search_agent(llm, toolkit):
             count = item.get("count", 0)
             logger.info(f"[SEARCH_AGENT]   - {tool}: {count}개")
 
-        notes_parts = []
-        for item in research_payload:
-            tool = item.get("tool", "")
-            if tool == "calculated_stats":
-                stats = item.get("stats", {})
-                if stats.get("review_stats"):
-                    notes_parts.append(stats["review_stats"].get("summary", ""))
-                if stats.get("demographics_stats"):
-                    notes_parts.append(stats["demographics_stats"].get("summary", ""))
-            else:
-                count = item.get("count", 0)
-                if count > 0:
-                    notes_parts.append(f"{tool}: {count}건")
-        
-        if notes_parts:
-            research_notes = " | ".join(notes_parts)
-
         return {
             "messages": messages,
-            "research_notes": research_notes,
-            "research_sources": research_sources,
             "research_payload": research_payload,
             "latest_performance_image": latest_performance_image,
         }

@@ -47,11 +47,11 @@ class BlockReportService:
             final_analysis_target_dates = analysis_target_dates.copy()
         else:
             final_analysis_target_dates = [today.strftime("%Y-%m")]
-        logger.info(f"[BLOCK_SERVICE] final_analysis_target_dates: {final_analysis_target_dates}")
+        #logger.info(f"[BLOCK_SERVICE] final_analysis_target_dates: {final_analysis_target_dates}")
         
         is_multi_date_analysis = len(final_analysis_target_dates) > 1
         dates_info = ", ".join(final_analysis_target_dates)
-        logger.info(f"[BLOCK_SERVICE] dates_info: {dates_info}")
+        #logger.info(f"[BLOCK_SERVICE] dates_info: {dates_info}")
         initial_message = f"""
 {organization_name}에 대한 보고서를 작성해주세요.
 
