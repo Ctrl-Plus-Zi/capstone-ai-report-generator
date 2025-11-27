@@ -485,7 +485,8 @@ def _build_analysis_prompt(
     org_name: str,
     report_topic: str,
     data_text: str,
-    latest_image: str = ""
+    latest_image: str = "",
+    block_configs: dict = None
 ) -> str:
     """분석 및 블록 생성을 위한 시스템 프롬프트 생성"""
     
@@ -513,6 +514,31 @@ def _build_analysis_prompt(
 ## 이미지 정보
 최근 전시/공연 이미지 URL: {latest_image}
 → create_image_block 도구로 이미지 블록을 생성하세요.
+"""
+    
+    # 번들별 생성해야 할 블록 목록
+    bundle_instructions = ""
+    if block_configs:
+        bundle_lines = []
+        for bundle_name, config in block_configs.items():
+            purpose = config.get("purpose", "")
+            block_type = config.get("type", "llm")
+            title = config.get("title", "")
+            
+            if purpose:
+                instruction = f"- **{bundle_name}**: {purpose}"
+                if block_type != "llm" and title:
+                    instruction += f" → {block_type} 차트로 '{title}' 생성"
+                bundle_lines.append(instruction)
+        
+        if bundle_lines:
+            bundle_instructions = f"""
+## 생성해야 할 블록 목록 (필수!)
+다음 데이터 분석을 수행하고 각각 블록을 생성하세요:
+
+{chr(10).join(bundle_lines)}
+
+**중요: 위 목록의 모든 항목에 대해 블록을 생성해야 합니다.**
 """
     
     return textwrap.dedent(f"""
@@ -560,34 +586,31 @@ def _build_analysis_prompt(
         
         {image_instruction}
         
+        {bundle_instructions}
+        
         # 수집된 데이터
         {data_text}
         
         # 블록 생성 지침
         
-        1. **데이터 분석 후 적절한 도구 선택**
-           - 비율/분포 데이터 → create_chart_block (doughnut 또는 bar)
-           - 상세 목록 데이터 → create_table_block
-           - 설명/요약 → create_markdown_block
+        1. **위 "생성해야 할 블록 목록"을 반드시 확인하고 모두 생성**
+           - 이미 생성된 블록(주의 표시)은 제외
+           - 데이터가 있으면 반드시 해당 차트/테이블 생성
         
         2. **차트/테이블 생성 시 주의**
            - labels와 values 배열 길이가 동일해야 함
            - values는 실제 숫자 (문자열 X)
-           - **description은 반드시 자세하게 작성** (3문장 이상)
-             예시: "40대 방문자가 38.5%로 가장 높은 비중을 차지합니다. 이는 문화예술 소비에 경제적 여유가 있는 연령대가 주요 타겟임을 보여줍니다. 30대와 50대도 각각 20% 이상으로 중장년층이 핵심 고객입니다."
+           - description은 자세하게 작성 (2-3문장)
         
-        3. **데이터 해석 규칙**
-           - review_stats의 rating_distribution → 평점 분포 bar 차트
-           - demographics_stats의 age_distribution → 연령대 doughnut 차트
-           - demographics_stats의 gender_distribution → 성별 doughnut 차트
-           - 공연/전시 데이터 → 테이블
-        
-        4. **중요: 데이터에서 직접 값 추출**
-           - 사전 계산된 통계(stats)가 있으면 그 값을 그대로 사용
-           - 원본 데이터에서 필요한 값을 계산하여 사용
+        3. **데이터에서 값 추출하는 법**
+           - tmz_cnt_00~tmz_cnt_23 → 0시~23시 방문자 수
+           - week_01~week_07 → 월~일 요일별 방문자 수
+           - wkdy_rt, wknd_rt → 평일/주말 비율
+           - income_01~03 → 저/중/고소득층 비율
+           - 각 컬럼명은 purpose에 힌트가 있음
         
         # 시작
-        위 데이터를 분석하고, 도구들을 호출하여 차트/테이블 블록을 생성하세요.
+        위 데이터를 분석하고, **생성해야 할 블록 목록의 모든 항목**에 대해 도구를 호출하세요.
     """).strip()
 
 
@@ -653,7 +676,8 @@ def create_analyse_agent(tool_llm, summary_llm, toolkit):
             org_name=org_name,
             report_topic=report_topic,
             data_text=data_text + pre_generated_info,
-            latest_image=latest_image
+            latest_image=latest_image,
+            block_configs=block_configs
         )
         
         # === 단계 4: LLM 호출 (도구 바인딩) ===

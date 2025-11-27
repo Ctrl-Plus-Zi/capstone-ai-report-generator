@@ -11,8 +11,9 @@
       "filter": ["filter", "테이블", {"필터조건": "값"}, "limit숫자", "저장키"]
     },
     "block_types": {
-      "bar": "막대 차트 (평점 분포 등)",
+      "bar": "막대 차트 (평점 분포, 시간대별 등)",
       "doughnut": "도넛 차트 (비율 표시)",
+      "line": "라인 차트 (시계열, 트렌드)",
       "table": "테이블 (목록 표시)",
       "llm": "LLM이 분석하여 적절한 블록 생성"
     }
@@ -21,7 +22,7 @@
   "bundles": {
     "리뷰": {
       "description": "구글맵/SNS 리뷰 데이터 수집",
-      "purpose": "리뷰 평점 분포와 고객 만족도 분석",
+      "purpose": "sns_content_rating(1~5점)으로 리뷰 평점 분포 막대 차트 생성. 고객 만족도 분석.",
       "queries": [
         ["search", "sns_buzz_master_tbl", "slta_nm", "$org", "facility"],
         ["filter", "sns_buzz_extract_contents", {"slta_cd": "$ref.facility.slta_cd"}, 100, "reviews"]
@@ -35,7 +36,7 @@
 
     "인구통계": {
       "description": "LG U+ 방문자 연령/성별 데이터",
-      "purpose": "주요 방문 연령대와 성별 비율 파악",
+      "purpose": "m_00~m_70(남성 연령대별), f_00~f_70(여성 연령대별) 비율로 연령대별/성별 도넛 차트 생성.",
       "queries": [
         ["search", "lguplus_dpg_api_tot", "cutr_facl_all_nm", "$org", "lgu_facility"],
         ["filter", "lguplus_dpg_api_tot", {"cutr_facl_id": "$ref.lgu_facility.cutr_facl_id"}, 12, "demographics"]
@@ -50,13 +51,194 @@
 
     "페르소나": {
       "description": "LG U+ 방문자 페르소나 데이터",
-      "purpose": "방문객의 라이프스타일과 관심사 파악",
+      "purpose": "female_rt/male_rt(성비), age_2030_rt/age_4050_rt/age_60abv_rt(연령대), kids_mom_rt(육아맘), resi_rt(거주민), trvl_rt(여행객) 등으로 방문객 특성 분석.",
       "queries": [
         ["filter", "lguplus_dpg_persona_tot", {"cutr_facl_id": "$ref.lgu_facility.cutr_facl_id"}, 12, "persona"]
       ],
       "requires": ["인구통계"],
       "block": {
         "type": "llm"
+      }
+    },
+
+    "시간대별방문": {
+      "description": "시간대별 방문자 분포 (0시~23시)",
+      "purpose": "tmz_cnt_00~tmz_cnt_23 컬럼으로 24시간 시간대별 방문자 수 막대 차트 생성. 피크 시간대와 한산한 시간대 파악.",
+      "queries": [
+        ["filter", "lguplus_dpg_api_tot", {"cutr_facl_id": "$ref.lgu_facility.cutr_facl_id"}, 1, "hourly_data"]
+      ],
+      "requires": ["인구통계"],
+      "block": {
+        "type": "bar",
+        "title": "시간대별 방문자 분포"
+      }
+    },
+
+    "요일별방문": {
+      "description": "요일별 방문자 분포 (월~일)",
+      "purpose": "week_01~week_07 컬럼으로 요일별(월~일) 방문자 수 막대 차트 생성. 주중/주말 패턴 분석.",
+      "queries": [
+        ["filter", "lguplus_dpg_api_tot", {"cutr_facl_id": "$ref.lgu_facility.cutr_facl_id"}, 1, "weekly_data"]
+      ],
+      "requires": ["인구통계"],
+      "block": {
+        "type": "bar",
+        "title": "요일별 방문자 분포"
+      }
+    },
+
+    "평일주말비교": {
+      "description": "평일 vs 주말 방문 비율 비교",
+      "purpose": "wkdy_rt(평일비율), wknd_rt(주말비율)로 평일/주말 방문 비율 도넛 차트 생성.",
+      "queries": [
+        ["filter", "lguplus_dpg_persona_tot", {"cutr_facl_id": "$ref.lgu_facility.cutr_facl_id"}, 1, "weekday_data"]
+      ],
+      "requires": ["인구통계"],
+      "block": {
+        "type": "doughnut",
+        "title": "평일 vs 주말 방문 비율"
+      }
+    },
+
+    "월별트렌드": {
+      "description": "월별 방문자 수 트렌드 (최근 12개월)",
+      "purpose": "base_yymm(기준연월)을 X축, vstr_cnt(방문자수)를 Y축으로 최근 12개월 방문자 추이 라인 차트 생성.",
+      "queries": [
+        ["filter", "lguplus_dpg_api_tot", {"cutr_facl_id": "$ref.lgu_facility.cutr_facl_id"}, 12, "monthly_trend"]
+      ],
+      "requires": ["인구통계"],
+      "block": {
+        "type": "line",
+        "title": "월별 방문자 수 추이"
+      }
+    },
+
+    "외국인방문": {
+      "description": "외국인 방문자 비율 분석",
+      "purpose": "frgr_rt(외국인비율)로 내국인/외국인 방문 비율 도넛 차트 생성. 외국인 관광객 비중 파악.",
+      "queries": [
+        ["filter", "lguplus_dpg_persona_tot", {"cutr_facl_id": "$ref.lgu_facility.cutr_facl_id"}, 1, "foreign_data"]
+      ],
+      "requires": ["인구통계"],
+      "block": {
+        "type": "doughnut",
+        "title": "내국인 vs 외국인 방문 비율"
+      }
+    },
+
+    "방문자유형": {
+      "description": "방문자 유형 분석 (거주민/여행객/육아맘 등)",
+      "purpose": "resi_rt(거주민비율), trvl_rt(여행객비율), kids_mom_rt(육아맘비율)로 방문자 유형 막대 차트 생성.",
+      "queries": [
+        ["filter", "lguplus_dpg_persona_tot", {"cutr_facl_id": "$ref.lgu_facility.cutr_facl_id"}, 1, "visitor_type"]
+      ],
+      "requires": ["인구통계"],
+      "block": {
+        "type": "bar",
+        "title": "방문자 유형 분포"
+      }
+    },
+
+    "주변맛집": {
+      "description": "시설 주변 인기 맛집 정보 (NICE 데이터)",
+      "purpose": "store_nm(가게명), addr(주소), upjong1_nm/upjong2_nm(업종)으로 주변 맛집 테이블 생성.",
+      "queries": [
+        ["search", "facilities", "mrc_snbd_nm", "$org", "samsung_facility"],
+        ["filter", "nice_delicious_foods", {"cutr_facl_id": "$ref.samsung_facility.cutr_facl_id"}, 10, "nearby_restaurants"]
+      ],
+      "block": {
+        "type": "table",
+        "title": "주변 인기 맛집 TOP 10"
+      }
+    },
+
+    "주변숙박": {
+      "description": "시설 주변 숙박업소 정보 (NICE 데이터)",
+      "purpose": "store_nm(숙박업소명), addr(주소), upjong1_nm(유형)으로 주변 숙박시설 테이블 생성.",
+      "queries": [
+        ["filter", "nice_lodgments", {"cutr_facl_id": "$ref.samsung_facility.cutr_facl_id"}, 10, "nearby_lodgments"]
+      ],
+      "requires": ["주변맛집"],
+      "block": {
+        "type": "table",
+        "title": "주변 숙박시설"
+      }
+    },
+
+    "추천메뉴": {
+      "description": "주변 상권 인기 메뉴 (NICE 데이터)",
+      "purpose": "gubun(구분), menu1_nm~menu3_nm(인기메뉴 1~3위), sum_sale_amt(매출액)으로 인기 메뉴 테이블 생성.",
+      "queries": [
+        ["filter", "nice_recommended_menus", {"cutr_facl_id": "$ref.samsung_facility.cutr_facl_id"}, 5, "popular_menus"]
+      ],
+      "requires": ["주변맛집"],
+      "block": {
+        "type": "table",
+        "title": "주변 상권 인기 메뉴"
+      }
+    },
+
+    "소득분포": {
+      "description": "방문자 소득 수준 분포 (LG U+ persona_metrics)",
+      "purpose": "income_01(저소득), income_02(중소득), income_03(고소득) 비율로 소득 분포 도넛 차트 생성.",
+      "queries": [
+        ["filter", "persona_metrics", {"cutr_facl_id": "$ref.lgu_facility.cutr_facl_id"}, 1, "income_data"]
+      ],
+      "requires": ["인구통계"],
+      "block": {
+        "type": "doughnut",
+        "title": "방문자 소득 분포"
+      }
+    },
+
+    "소비성향": {
+      "description": "방문자 소비 성향 분석 (프리미엄/가격민감)",
+      "purpose": "prmm_csm_tndc_score(프리미엄소비성향), prc_snsv_csm_tndc_score(가격민감성향) 점수로 소비 성향 막대 차트 생성. 점수가 높을수록 해당 성향 강함.",
+      "queries": [
+        ["filter", "persona_metrics", {"cutr_facl_id": "$ref.lgu_facility.cutr_facl_id"}, 1, "spending_data"]
+      ],
+      "requires": ["소득분포"],
+      "block": {
+        "type": "bar",
+        "title": "방문자 소비 성향"
+      }
+    },
+
+    "문화관심도": {
+      "description": "방문자의 문화/여행 관심도",
+      "purpose": "clt_ev_acti_inrt_tndc_score(문화이벤트), dom_trv_inrt_tndc_score(국내여행), frn_trv_inrt_tndc_score(해외여행) 관심도 점수로 막대 차트 생성.",
+      "queries": [
+        ["filter", "persona_metrics", {"cutr_facl_id": "$ref.lgu_facility.cutr_facl_id"}, 1, "interest_data"]
+      ],
+      "requires": ["인구통계"],
+      "block": {
+        "type": "bar",
+        "title": "방문자 관심 분야"
+      }
+    },
+
+    "시설등급": {
+      "description": "시설의 방문자/매출/규모 등급",
+      "purpose": "slta_vstr_grde(방문자등급), slta_sale_grde(매출등급), slta_size_grde(규모등급)로 시설 등급 테이블 생성. S>A>B>C 순서.",
+      "queries": [
+        ["search", "sns_buzz_master_tbl", "slta_nm", "$org", "facility_grade"]
+      ],
+      "block": {
+        "type": "table",
+        "title": "시설 등급 현황"
+      }
+    },
+
+    "삼성카드인구통계": {
+      "description": "삼성카드 기반 방문자 인구통계",
+      "purpose": "mrcno_pct_20_male~50_male(남성 연령대별), mrcno_pct_20_female~50_female(여성 연령대별), mrcno_foreign_rt(외국인비율)로 결제자 기반 인구통계 도넛 차트 생성.",
+      "queries": [
+        ["search", "facilities", "mrc_snbd_nm", "$org", "samsung_facility"],
+        ["filter", "mrcno_demographics", {"cutr_facl_id": "$ref.samsung_facility.cutr_facl_id"}, 1, "samsung_demo"]
+      ],
+      "block": {
+        "type": "doughnut",
+        "title": "결제자 연령/성별 분포 (삼성카드)"
       }
     }
   },
@@ -68,11 +250,21 @@
     },
     "공연장": {
       "description": "예술의전당, 세종문화회관 등 공연장용",
-      "bundles": ["리뷰", "인구통계", "페르소나"]
+      "bundles": ["리뷰", "인구통계", "시간대별방문", "요일별방문", "페르소나", "문화관심도"]
     },
     "미술관": {
       "description": "국립현대미술관, 국립중앙박물관 등",
-      "bundles": ["리뷰", "인구통계", "페르소나"]
+      "bundles": ["리뷰", "인구통계", "외국인방문", "시간대별방문", "페르소나"]
+    },
+    "관광지": {
+      "description": "관광 명소, 테마파크 등",
+      "bundles": ["리뷰", "인구통계", "외국인방문", "방문자유형", "월별트렌드", "주변맛집", "주변숙박"]
+    },
+    "상세분석": {
+      "description": "심층 분석이 필요한 경우",
+      "bundles": ["리뷰", "인구통계", "시간대별방문", "요일별방문", "평일주말비교", "월별트렌드", 
+                  "외국인방문", "방문자유형", "페르소나", "소득분포", "소비성향", "문화관심도",
+                  "주변맛집", "추천메뉴"]
     }
   },
 
@@ -80,7 +272,9 @@
     "예술의전당": "공연장",
     "세종문화회관": "공연장",
     "국립현대미술관": "미술관",
-    "국립중앙박물관": "미술관"
+    "국립중앙박물관": "미술관",
+    "롯데월드": "관광지",
+    "에버랜드": "관광지",
+    "경복궁": "관광지"
   }
 }
-
