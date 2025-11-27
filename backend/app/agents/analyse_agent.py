@@ -282,15 +282,36 @@ def _create_single_google_block(
             img_title = title if title else "시설 외관"
             return {
                 "type": "image",
+                "title": img_title,  # 로깅 및 일관성을 위해 title 추가
                 "url": url,
                 "alt": img_title,
                 "caption": reasoning
             }
     
     elif block_type == "table":
-        # Distance Matrix 또는 nearby_search 결과 처리
+        # Distance Matrix, nearby_search, 또는 일반 테이블 결과 처리
         rows = data.get("rows", [])
         headers = data.get("headers", [])
+        
+        # Google Places nearby_search 결과 처리
+        places = data.get("places", [])
+        if places and not rows:
+            headers = ["장소명", "유형", "평점", "리뷰수", "주소"]
+            rows = []
+            for place in places:
+                name = place.get("name", "-")
+                types = place.get("types", [])
+                type_str = types[0] if types else "-"
+                # 타입 한글화
+                type_map = {
+                    "restaurant": "음식점", "cafe": "카페", "museum": "박물관",
+                    "park": "공원", "tourist_attraction": "관광지", "art_gallery": "미술관"
+                }
+                type_str = type_map.get(type_str, type_str)
+                rating = place.get("rating", "-")
+                reviews = place.get("user_ratings_total", "-")
+                address = place.get("vicinity", place.get("formatted_address", "-"))
+                rows.append([name, type_str, rating, reviews, address])
         
         # Distance Matrix 응답 처리
         if "origins" in data and not rows:
@@ -310,8 +331,25 @@ def _create_single_google_block(
                                 distance = elem.get("distance", {}).get("text", "-")
                                 rows.append([origin, dest, duration, distance])
         
+        # Place Details 응답 처리 (단일 장소 정보)
+        if "name" in data and "rating" in data and not rows:
+            headers = ["항목", "정보"]
+            rows = [
+                ["장소명", data.get("name", "-")],
+                ["평점", f"{data.get('rating', '-')} ({data.get('user_ratings_total', 0)}개 리뷰)"],
+                ["주소", data.get("formatted_address", "-")],
+                ["전화번호", data.get("national_phone_number", "-")],
+                ["웹사이트", data.get("website_uri", "-")],
+            ]
+            # 영업시간 추가
+            hours = data.get("regular_opening_hours", {})
+            if hours and hours.get("weekday_text"):
+                weekday_text = hours.get("weekday_text", [])
+                if weekday_text:
+                    rows.append(["영업시간", weekday_text[0] if len(weekday_text) == 1 else "상세 참조"])
+        
         if rows and headers:
-            table_title = title if title else "접근성 정보"
+            table_title = title if title else "주변 정보"
             return {
                 "type": "table",
                 "title": table_title,
@@ -373,6 +411,7 @@ def _create_blocks_from_google_api(research_payload: List[dict]) -> List[dict]:
                 generated_block = _create_single_google_block(data, block_type, block_config, reasoning, tool_name)
                 if generated_block:
                     blocks.append(generated_block)
+                    logger.info(f"[ANALYSE_AGENT] Google API (혼합) → {generated_block['type']} 블록 생성: {generated_block.get('title', '')}")
             continue
         
         # 단일 API 번들
@@ -389,6 +428,139 @@ def _create_blocks_from_google_api(research_payload: List[dict]) -> List[dict]:
         if generated_block:
             blocks.append(generated_block)
             logger.info(f"[ANALYSE_AGENT] Google API → {generated_block['type']} 블록 생성: {generated_block.get('title', '')}")
+    
+    return blocks
+
+
+def _create_blocks_from_kcisa_api(research_payload: List[dict]) -> List[dict]:
+    """
+    research_payload에서 KCISA API 결과를 감지하여 직접 블록 생성합니다.
+    
+    전시정보, 공연정보 등 KCISA API 결과를 테이블 + 이미지 블록으로 변환합니다.
+    
+    Args:
+        research_payload: Search Agent에서 수집된 데이터 목록
+    
+    Returns:
+        생성된 KCISA API 블록 목록 (table, image)
+    """
+    blocks = []
+    
+    for item in research_payload:
+        tool_name = item.get("tool", "")
+        data = item.get("data", [])
+        
+        if not data or not isinstance(data, list):
+            continue
+        
+        # 전시 정보 API
+        if tool_name == "search_exhibition_info_api":
+            # 전시 테이블 생성
+            headers = ["전시명", "기관", "기간", "장르"]
+            rows = []
+            images = []
+            
+            for exhibition in data[:15]:  # 최대 15개
+                title = exhibition.get("TITLE", "")
+                site = exhibition.get("EVENT_SITE", exhibition.get("CNTC_INSTT_NM", ""))
+                period = exhibition.get("PERIOD", exhibition.get("EVENT_PERIOD", ""))
+                genre = exhibition.get("GENRE", "전시")
+                
+                if title:
+                    rows.append([title, site, period, genre])
+                
+                # 대표 이미지 수집 (최대 3개)
+                img_url = exhibition.get("IMAGE_OBJECT", "")
+                if img_url and len(images) < 3:
+                    images.append({
+                        "url": img_url,
+                        "title": title
+                    })
+            
+            if rows:
+                blocks.append({
+                    "type": "table",
+                    "title": "진행 중인 전시",
+                    "headers": headers,
+                    "rows": rows,
+                    "description": f"총 {len(rows)}개의 전시 정보"
+                })
+                logger.info(f"[ANALYSE_AGENT] KCISA API → 전시 테이블 생성: {len(rows)}개")
+            
+            # 대표 이미지 블록 생성
+            for img in images[:1]:  # 대표 이미지 1개만
+                blocks.append({
+                    "type": "image",
+                    "url": img["url"],
+                    "alt": img["title"],
+                    "caption": f"전시: {img['title']}"
+                })
+                logger.info(f"[ANALYSE_AGENT] KCISA API → 전시 이미지 생성")
+        
+        # 공연 정보 API
+        elif tool_name == "search_performance_info_api":
+            headers = ["공연명", "장소", "기간", "장르"]
+            rows = []
+            images = []
+            
+            for perf in data[:15]:  # 최대 15개
+                title = perf.get("TITLE", "")
+                site = perf.get("EVENT_SITE", perf.get("CNTC_INSTT_NM", ""))
+                period = perf.get("PERIOD", perf.get("EVENT_PERIOD", ""))
+                genre = perf.get("GENRE", "공연")
+                
+                if title:
+                    rows.append([title, site, period, genre])
+                
+                img_url = perf.get("IMAGE_OBJECT", "")
+                if img_url and len(images) < 3:
+                    images.append({
+                        "url": img_url,
+                        "title": title
+                    })
+            
+            if rows:
+                blocks.append({
+                    "type": "table",
+                    "title": "진행 중인 공연",
+                    "headers": headers,
+                    "rows": rows,
+                    "description": f"총 {len(rows)}개의 공연 정보"
+                })
+                logger.info(f"[ANALYSE_AGENT] KCISA API → 공연 테이블 생성: {len(rows)}개")
+            
+            for img in images[:1]:
+                blocks.append({
+                    "type": "image",
+                    "url": img["url"],
+                    "alt": img["title"],
+                    "caption": f"공연: {img['title']}"
+                })
+                logger.info(f"[ANALYSE_AGENT] KCISA API → 공연 이미지 생성")
+        
+        # 소장품 정보 API
+        elif tool_name == "search_museum_collection_api":
+            headers = ["소장품명", "시대", "재질", "크기"]
+            rows = []
+            
+            for collection in data[:10]:  # 최대 10개
+                title = collection.get("TITLE", collection.get("NAME", ""))
+                era = collection.get("ERA", collection.get("PERIOD", ""))
+                material = collection.get("MATERIAL", "")
+                size = collection.get("SIZE", collection.get("DIMENSION", ""))
+                
+                if title:
+                    rows.append([title, era, material, size])
+            
+            if rows:
+                blocks.append({
+                    "type": "table",
+                    "title": "소장품 목록",
+                    "headers": headers,
+                    "rows": rows,
+                    "description": f"총 {len(rows)}개의 소장품 정보"
+                })
+                logger.info(f"[ANALYSE_AGENT] KCISA API → 소장품 테이블 생성: {len(rows)}개")
     
     return blocks
 
@@ -757,14 +929,24 @@ def _build_analysis_prompt(
         
         ## 1. create_chart_block
         차트 블록 생성. 데이터 시각화에 사용.
-        - chart_type: "doughnut" (비율), "bar" (비교), "line" (추이), "pie" (구성비)
+        - chart_type: 아래 6가지 중 데이터에 맞는 유형 선택
+          * "doughnut": 비율 분포 (연령대별, 성별) - 중앙 공백 있는 원형
+          * "pie": 구성비 (전체 대비 비율) - 전체 원형
+          * "bar": 항목 비교 (평점 분포, 관심 분야, 카테고리별) - 막대
+          * "line": 시계열 추이 (시간대별 방문자, 요일별 변화) - 선 그래프
+          * "radar": 다차원 비교 (페르소나 특성, 여러 지표 동시 비교) - 거미줄형
+          * "polarArea": 방사형 비율 (카테고리별 크기+비율 동시 표현) - 방사형 막대
         - title: 차트 제목
         - labels: 라벨 배열 (예: ["20대", "30대", "40대"])
         - values: 값 배열 (예: [25.5, 35.2, 22.1])
         - description: **자세한 분석 설명** (필수! 3문장 이상)
-          - 왜 이 차트 유형을 선택했는지
-          - 데이터에서 발견한 핵심 패턴/특징
-          - 이 데이터가 의미하는 바 (인사이트)
+        
+        **차트 유형 선택 가이드:**
+        - 시간대별 데이터 (tmz_cnt_00~23) → "line" 사용
+        - 요일별 데이터 (week_01~07) → "line" 또는 "bar"
+        - 연령대/성별 분포 → "doughnut" 또는 "pie"
+        - 관심 분야/카테고리 비교 → "bar" 또는 "polarArea"
+        - 페르소나 특성 (여러 항목) → "radar"
         
         ## 2. create_table_block
         테이블 블록 생성. 상세 정보 정리에 사용.
@@ -886,6 +1068,12 @@ def create_analyse_agent(tool_llm, summary_llm, toolkit):
         if google_api_blocks:
             pre_generated_blocks.extend(google_api_blocks)
             logger.info(f"[ANALYSE_AGENT] Google API에서 {len(google_api_blocks)}개 블록 생성")
+        
+        # === 단계 1.6: KCISA API 데이터에서 블록 직접 생성 (LLM 스킵) ===
+        kcisa_api_blocks = _create_blocks_from_kcisa_api(research_payload)
+        if kcisa_api_blocks:
+            pre_generated_blocks.extend(kcisa_api_blocks)
+            logger.info(f"[ANALYSE_AGENT] KCISA API에서 {len(kcisa_api_blocks)}개 블록 생성")
         
         # === 단계 2: 데이터 준비 (LLM용) ===
         data_text = _prepare_data_for_analysis(research_payload)

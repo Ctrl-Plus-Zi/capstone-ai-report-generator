@@ -63,11 +63,11 @@ COMPOSE_SYSTEM_PROMPT = textwrap.dedent("""
        - 예: chart(id="block_1") 다음에 markdown(paired_with="block_1")
        - row로 가로 배치하거나 그냥 연속 배치 (세로)
 
-    3. **차트 그룹화 (3~4개 적극 활용)**:
-       - doughnut/pie 차트 3~4개 + 각각의 짝 마크다운을 한 row로 묶기
-       - 비슷한 주제의 차트는 같은 row에 배치 (예: 연령대별, 성별, 지역별 → 한 row)
-       - bar/line 차트도 2~3개씩 row로 그룹핑 가능
-       - 차트 + 짝 마크다운 순서: [chart1, markdown1, chart2, markdown2, ...]
+    3. **차트 그룹화 (한 row에 최대 4개!)**:
+       - 한 row에는 **최대 4개 블록**만 배치 (절대 초과 금지)
+       - 차트 2개 + 각각의 짝 마크다운 2개 = 4개가 이상적
+       - 차트 + 짝 마크다운 순서: [chart1, markdown1, chart2, markdown2]
+       - 차트가 3개 이상이면 여러 row로 나눠서 배치
     
     4. **테이블은 단독 배치**: table 블록은 row에 포함하지 않음 (전체 너비 사용)
     
@@ -107,8 +107,8 @@ COMPOSE_SYSTEM_PROMPT = textwrap.dedent("""
         10,  // 대기질
         11,  // 접근성 테이블
         7,   // 주요 발견
-        {"type": "row", "indices": [0, 3, 1, 4, 2, 5], "gap": "20px"},  // 도넛 3개 + 짝 마크다운
-        12, 13,  // 막대 차트 + 짝 (단독)
+        {"type": "row", "indices": [0, 3, 1, 4], "gap": "16px"},  // 차트 2개 + 짝 마크다운 (최대 4개!)
+        {"type": "row", "indices": [2, 5, 12, 13], "gap": "16px"},  // 나머지 차트들 (최대 4개!)
         8    // 시사점 (맨 끝)
     ]
 """).strip()
@@ -188,17 +188,22 @@ def _format_blocks_for_llm(block_drafts: List[dict]) -> str:
 
 
 def _apply_layout_sequence(block_drafts: List[dict], layout_sequence: List) -> List[dict]:
-    """layout_sequence를 적용하여 최종 blocks 배열을 생성합니다."""
+    """layout_sequence를 적용하여 최종 blocks 배열을 생성합니다.
+    
+    LLM이 누락한 블록은 자동으로 마지막에 추가합니다.
+    """
     if not layout_sequence:
         return block_drafts.copy()
     
     result = []
+    used_indices = set()  # 사용된 인덱스 추적
     
     for item in layout_sequence:
         if isinstance(item, int):
             # 개별 블록 인덱스
             if 0 <= item < len(block_drafts):
                 result.append(block_drafts[item])
+                used_indices.add(item)
         
         elif isinstance(item, dict):
             # row 컨테이너
@@ -210,6 +215,7 @@ def _apply_layout_sequence(block_drafts: List[dict], layout_sequence: List) -> L
             for idx in indices:
                 if isinstance(idx, int) and 0 <= idx < len(block_drafts):
                     children.append(block_drafts[idx])
+                    used_indices.add(idx)
             
             if children:
                 result.append({
@@ -217,6 +223,13 @@ def _apply_layout_sequence(block_drafts: List[dict], layout_sequence: List) -> L
                     "gap": gap,
                     "children": children
                 })
+    
+    # 누락된 블록 자동 추가
+    missing_indices = set(range(len(block_drafts))) - used_indices
+    if missing_indices:
+        logger.warning(f"[COMPOSE_AGENT] 누락된 블록 {len(missing_indices)}개 자동 추가: {sorted(missing_indices)}")
+        for idx in sorted(missing_indices):
+            result.append(block_drafts[idx])
     
     return result
 

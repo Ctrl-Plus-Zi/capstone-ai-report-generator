@@ -241,10 +241,18 @@ def _call_api(api_name: str, params: Dict) -> Dict[str, Any]:
                 mode=params.get("mode", "transit")
             )
         elif api_name == "distance_matrix":
+            # destinations가 문자열이면 배열로 변환
+            destinations = params.get("destinations", [])
+            if isinstance(destinations, str):
+                destinations = [destinations]
             result = func(
                 origins=params.get("origins", []),
-                destinations=params.get("destinations", []),
+                destinations=destinations,
                 mode=params.get("mode", "transit")
+            )
+        elif api_name == "place_details":
+            result = func(
+                place_id=params.get("place_id")
             )
         else:
             # 일반적인 호출

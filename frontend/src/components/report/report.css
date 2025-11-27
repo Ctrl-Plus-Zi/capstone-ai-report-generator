@@ -37,7 +37,11 @@
 
 .markdown-block {
   margin-bottom: 16px;
+  padding: 16px;
   line-height: 1.6;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #fefefe;
 }
 
 .markdown-block h1,
@@ -64,9 +68,10 @@
 
 .chart-block {
   margin-bottom: 16px;
-  padding: 12px;
+  padding: 16px;
   background: #fafafa;
-  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
   height: 100%;
   box-sizing: border-box;
 }
@@ -103,7 +108,11 @@
 
 .image-block {
   margin-bottom: 24px;
+  padding: 16px;
   text-align: center;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #fefefe;
 }
 
 .image-block img {
@@ -124,7 +133,11 @@
 
 .table-block {
   margin-bottom: 24px;
+  padding: 16px;
   overflow-x: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #fefefe;
 }
 
 .table-block-title {
@@ -187,10 +200,10 @@
 
 .map-block {
   margin-bottom: 16px;
-  padding: 12px;
-  background: #f8fafc;
-  border-radius: 10px;
-  border: 1px solid #e2e8f0;
+  padding: 16px;
+  background: #fefefe;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
   max-width: 600px;
 }
 
@@ -328,7 +341,11 @@
 
 .air-quality-block {
   margin-bottom: 16px;
+  padding: 16px;
   max-width: 400px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #fefefe;
 }
 
 .air-quality-title {

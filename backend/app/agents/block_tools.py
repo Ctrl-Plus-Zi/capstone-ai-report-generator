@@ -27,7 +27,7 @@ def create_markdown_block(
 
 @tool
 def create_chart_block(
-    chart_type: Annotated[str, "차트 유형: doughnut, bar, line, pie, radar 중 하나"],
+    chart_type: Annotated[str, "차트 유형: doughnut, bar, line, pie, radar, polarArea 중 하나"],
     title: Annotated[str, "차트 제목"],
     labels: Annotated[List[str], "데이터 라벨 배열 (예: ['20대', '30대', '40대'])"],
     values: Annotated[List[float], "데이터 값 배열 (예: [25, 35, 22])"],
@@ -36,10 +36,12 @@ def create_chart_block(
     """Chart.js 차트 블록을 생성합니다.
     
     차트 유형별 권장 용도:
-    - doughnut/pie: 비율 표시 (연령대별, 성별 분포)
-    - bar: 항목 비교 (월별 방문자, 평점 분포)
-    - line: 시계열 추이 (월별 변화)
-    - radar: 다차원 비교 (페르소나 특성)
+    - doughnut: 비율 표시, 중앙 공백 (연령대별, 성별 분포)
+    - pie: 비율 표시, 전체 원 (구성비)
+    - bar: 항목 비교, 크기 비교 (월별 방문자, 평점 분포, 관심도)
+    - line: 시계열 추이, 변화 트렌드 (시간대별 방문자, 월별 변화)
+    - radar: 다차원 비교, 여러 지표 동시 비교 (페르소나 특성, 만족도 항목별)
+    - polarArea: 방사형 비율, 크기+비율 동시 표현 (카테고리별 관심도)
     
     Returns:
         {"type": "chart", "chartType": "...", "title": "...", "data": {...}, "description": "..."}

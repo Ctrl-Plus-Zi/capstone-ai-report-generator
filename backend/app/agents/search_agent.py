@@ -472,8 +472,20 @@ def create_search_agent(llm, toolkit):
         logger.info(f"[SEARCH_AGENT] 수집된 데이터: {len(research_payload)}개")
         for item in research_payload:
             tool = item.get("tool", "unknown")
-            count = item.get("count", 0)
-            logger.info(f"[SEARCH_AGENT]   - {tool}: {count}개")
+            # count 필드가 없으면 data 길이 또는 success 여부로 표시
+            if "count" in item:
+                count_str = f"{item['count']}개"
+            elif "data" in item:
+                data = item["data"]
+                if isinstance(data, list):
+                    count_str = f"{len(data)}개"
+                elif isinstance(data, dict) and data.get("success"):
+                    count_str = "성공"
+                else:
+                    count_str = "데이터 있음"
+            else:
+                count_str = "0개"
+            logger.info(f"[SEARCH_AGENT]   - {tool}: {count_str}")
 
         return {
             "messages": messages,
