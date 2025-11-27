@@ -35,6 +35,8 @@ COMPOSE_SYSTEM_PROMPT = textwrap.dedent("""
 
     ## 블록 유형 및 속성
     - **chart/table/image**: 데이터 블록 (id 속성 있음: "block_1", "block_2" 등)
+    - **map**: 지도 블록 (시설 위치, 주변 정보 표시)
+    - **air_quality**: 대기질 정보 블록 (AQI, 미세먼지 등)
     - **markdown**: 텍스트 블록
       - paired_with="block_X": 해당 블록의 짝 마크다운 (분석 텍스트)
       - role="comprehensive": 총체적 분석 (section 속성으로 구분)
@@ -49,7 +51,10 @@ COMPOSE_SYSTEM_PROMPT = textwrap.dedent("""
     ### 필수 규칙 (중요!)
     1. **보고서 구조**: 아래 순서로 배치
        - overview (개요) → 맨 앞
-       - key_findings (주요 발견) → 데이터 블록 전
+       - **map (지도) → 개요 바로 다음 (최우선)** 
+       - **air_quality (대기질) → 지도 다음**
+       - **접근성 table (title에 "접근성" 포함) → 대기질 다음**
+       - key_findings (주요 발견) → 환경정보 다음
        - 데이터 블록 + 짝 마크다운 → 본문
        - detailed_analysis (상세 분석) → 데이터 블록 후
        - implications (시사점) → 맨 끝
@@ -58,9 +63,15 @@ COMPOSE_SYSTEM_PROMPT = textwrap.dedent("""
        - 예: chart(id="block_1") 다음에 markdown(paired_with="block_1")
        - row로 가로 배치하거나 그냥 연속 배치 (세로)
 
-    3. **비율 차트 그룹화**: doughnut/pie 차트 2개 + 각각의 짝 마크다운을 row로 묶기
+    3. **차트 그룹화 (3~4개 적극 활용)**:
+       - doughnut/pie 차트 3~4개 + 각각의 짝 마크다운을 한 row로 묶기
+       - 비슷한 주제의 차트는 같은 row에 배치 (예: 연령대별, 성별, 지역별 → 한 row)
+       - bar/line 차트도 2~3개씩 row로 그룹핑 가능
+       - 차트 + 짝 마크다운 순서: [chart1, markdown1, chart2, markdown2, ...]
     
     4. **테이블은 단독 배치**: table 블록은 row에 포함하지 않음 (전체 너비 사용)
+    
+    5. **지도/대기질/접근성 블록**: 단독 배치 (전체 너비), 상단 환경정보 영역에 연속 배치
 
     ## 도구 사용법
     
@@ -76,18 +87,29 @@ COMPOSE_SYSTEM_PROMPT = textwrap.dedent("""
     block_drafts:
     [0] chart (id=block_1, doughnut): "연령대별 방문자"
     [1] chart (id=block_2, doughnut): "성별 방문자"
-    [2] markdown (paired_with=block_1): "**분석 결과** 30대가..."
-    [3] markdown (paired_with=block_2): "**분석 결과** 여성이..."
-    [4] markdown (role=comprehensive, section=overview): "## 개요..."
-    [5] markdown (role=comprehensive, section=key_findings): "## 주요 발견..."
-    [6] markdown (role=comprehensive, section=implications): "## 시사점..."
+    [2] chart (id=block_3, doughnut): "지역별 방문자"
+    [3] markdown (paired_with=block_1): "**분석 결과** 30대가..."
+    [4] markdown (paired_with=block_2): "**분석 결과** 여성이..."
+    [5] markdown (paired_with=block_3): "**분석 결과** 서울이..."
+    [6] markdown (role=comprehensive, section=overview): "## 개요..."
+    [7] markdown (role=comprehensive, section=key_findings): "## 주요 발견..."
+    [8] markdown (role=comprehensive, section=implications): "## 시사점..."
+    [9] map (id=block_4): "시설 위치"
+    [10] air_quality (id=block_5): "대기질 정보"
+    [11] table (id=block_6): "접근성 정보"
+    [12] chart (id=block_7, bar): "월별 방문 추이"
+    [13] markdown (paired_with=block_7): "**분석 결과** 여름 성수기..."
 
     좋은 레이아웃:
     layout_sequence = [
-        4,  // 개요 (맨 앞)
-        5,  // 주요 발견
-        {"type": "row", "indices": [0, 2, 1, 3], "gap": "24px"},  // 차트들
-        6   // 시사점 (맨 끝)
+        6,   // 개요 (맨 앞)
+        9,   // 지도 (최우선)
+        10,  // 대기질
+        11,  // 접근성 테이블
+        7,   // 주요 발견
+        {"type": "row", "indices": [0, 3, 1, 4, 2, 5], "gap": "20px"},  // 도넛 3개 + 짝 마크다운
+        12, 13,  // 막대 차트 + 짝 (단독)
+        8    // 시사점 (맨 끝)
     ]
 """).strip()
 
@@ -145,6 +167,19 @@ def _format_blocks_for_llm(block_drafts: List[dict]) -> str:
             alt = block.get("alt", "")
             id_str = f", id={block_id}" if block_id else ""
             lines.append(f"[{i}] image{id_str}: \"{alt}\"")
+        
+        elif block_type == "map":
+            title = block.get("title", "")
+            markers_count = len(block.get("markers", []))
+            id_str = f", id={block_id}" if block_id else ""
+            lines.append(f"[{i}] map{id_str}: \"{title}\" (마커 {markers_count}개)")
+        
+        elif block_type == "air_quality":
+            title = block.get("title", "")
+            aqi = block.get("aqi", 0)
+            category = block.get("category", "")
+            id_str = f", id={block_id}" if block_id else ""
+            lines.append(f"[{i}] air_quality{id_str}: \"{title}\" (AQI {aqi}, {category})")
         
         else:
             lines.append(f"[{i}] {block_type}: (unknown)")
@@ -222,6 +257,35 @@ def _blocks_to_markdown(blocks: List[dict]) -> str:
             if desc:
                 md_table += f"\n*{desc}*"
             result.append(md_table)
+        
+        elif block_type == "map":
+            title = block.get("title", "지도")
+            desc = block.get("description", "")
+            center = block.get("center", {})
+            markers = block.get("markers", [])
+            md = f"### {title}\n\n"
+            md += f"위치: ({center.get('lat', 0):.4f}, {center.get('lng', 0):.4f})\n"
+            if markers:
+                md += f"표시된 장소: {len(markers)}개\n"
+            if desc:
+                md += f"\n{desc}"
+            result.append(md)
+        
+        elif block_type == "air_quality":
+            title = block.get("title", "대기질")
+            aqi = block.get("aqi", 0)
+            category = block.get("category", "")
+            pollutants = block.get("pollutants", {})
+            recommendation = block.get("recommendation", "")
+            md = f"### {title}\n\n"
+            md += f"- AQI: {aqi} ({category})\n"
+            if pollutants.get("pm25"):
+                md += f"- PM2.5: {pollutants['pm25']} µg/m³\n"
+            if pollutants.get("pm10"):
+                md += f"- PM10: {pollutants['pm10']} µg/m³\n"
+            if recommendation:
+                md += f"\n{recommendation}"
+            result.append(md)
         
         elif block_type == "row":
             # row 컨테이너의 children 재귀 처리

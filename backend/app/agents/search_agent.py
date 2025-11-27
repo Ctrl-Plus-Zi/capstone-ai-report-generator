@@ -22,6 +22,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from app.agents.db_agent_tools import DB_SCHEMA_CONTEXT
 from app.agents.query_executor import execute_data_queries
 from app.agents.query_bundle_loader import get_all_for_org
+from app.agents import api_bundle_loader
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -389,6 +390,82 @@ def create_search_agent(llm, toolkit):
                         
             except Exception as e:
                 logger.error(f"[SEARCH_AGENT] [단계4] API 실행 실패: {tool_name} - {e}")
+
+        # 단계 5: Google API 번들 실행
+        logger.info(f"[SEARCH_AGENT] [단계5] Google API 번들 실행")
+        
+        try:
+            # DB 결과에서 좌표 추출
+            lat, lng, address = None, None, ""
+            
+            # research_payload에서 좌표 찾기
+            for item in research_payload:
+                tool_name = item.get("tool", "")
+                data = item.get("data", []) or item.get("sample", [])
+                
+                if not data or not isinstance(data, list):
+                    continue
+                
+                first_record = data[0] if data else {}
+                
+                # LG U+ 데이터에서 좌표 (cutr_facl_xcrd, cutr_facl_ycrd)
+                if "lgu_facility" in tool_name or "demographics" in tool_name:
+                    if first_record.get("cutr_facl_xcrd") and first_record.get("cutr_facl_ycrd"):
+                        lng = float(first_record["cutr_facl_xcrd"])
+                        lat = float(first_record["cutr_facl_ycrd"])
+                        address = first_record.get("cutr_facl_addr", "")
+                        logger.info(f"[SEARCH_AGENT] [단계5] LGU+ 좌표 발견: ({lat}, {lng})")
+                        break
+                
+                # SNS버즈 데이터에서 좌표 (slta_xcrd, slta_ycrd)
+                if "facility" in tool_name:
+                    if first_record.get("slta_xcrd") and first_record.get("slta_ycrd"):
+                        lng = float(first_record["slta_xcrd"])
+                        lat = float(first_record["slta_ycrd"])
+                        address = first_record.get("slta_addr", "")
+                        logger.info(f"[SEARCH_AGENT] [단계5] SNS버즈 좌표 발견: ({lat}, {lng})")
+                        break
+            
+            # 좌표가 있으면 Google API 번들 실행
+            if lat and lng:
+                # 컨텍스트 구성
+                google_context = {
+                    "org": org_name,
+                    "lat": lat,
+                    "lng": lng,
+                    "address": address
+                }
+                
+                # 기관별 preset으로 번들 실행
+                preset = api_bundle_loader.get_preset_for_org(org_name)
+                bundle_names = api_bundle_loader.get_bundles_for_preset(preset)
+                
+                logger.info(f"[SEARCH_AGENT] [단계5] preset: {preset}, 번들: {bundle_names}")
+                
+                for bundle_name in bundle_names:
+                    try:
+                        api_result, block_config = api_bundle_loader.execute_api_bundle(
+                            bundle_name, google_context
+                        )
+                        
+                        if api_result.get("success"):
+                            research_payload.append({
+                                "tool": f"google_api.{bundle_name}",
+                                "data": api_result,
+                                "block_config": block_config,
+                                "reasoning": f"Google API '{bundle_name}' 번들 실행 결과"
+                            })
+                            logger.info(f"[SEARCH_AGENT] [단계5] {bundle_name} 성공")
+                        else:
+                            logger.warning(f"[SEARCH_AGENT] [단계5] {bundle_name} 실패: {api_result.get('error')}")
+                    
+                    except Exception as bundle_error:
+                        logger.error(f"[SEARCH_AGENT] [단계5] {bundle_name} 오류: {bundle_error}")
+            else:
+                logger.info(f"[SEARCH_AGENT] [단계5] 좌표 없음, Google API 스킵")
+        
+        except Exception as e:
+            logger.error(f"[SEARCH_AGENT] [단계5] Google API 실행 오류: {e}")
 
         # 결과 정리
         logger.info(f"[SEARCH_AGENT] ====== 완료 ======")

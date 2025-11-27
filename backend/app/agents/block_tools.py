@@ -105,11 +105,90 @@ def create_image_block(
     }
 
 
+@tool
+def create_map_block(
+    title: Annotated[str, "지도 제목 (예: '시설 위치')"],
+    center_lat: Annotated[float, "지도 중심 위도"],
+    center_lng: Annotated[float, "지도 중심 경도"],
+    zoom: Annotated[int, "지도 줌 레벨 (1-20, 기본 15)"] = 15,
+    markers: Annotated[List[dict], "마커 목록 [{lat, lng, label, type?}, ...]"] = None,
+    description: Annotated[str, "지도 설명 텍스트"] = ""
+) -> dict:
+    """인터랙티브 지도 블록을 생성합니다.
+    
+    시설 위치, 주변 장소 등을 지도에 표시할 때 사용합니다.
+    프론트엔드에서 Google Maps JavaScript API로 렌더링됩니다.
+    
+    마커 타입: 'facility' (기본), 'restaurant', 'attraction', 'transit'
+    
+    Returns:
+        {"type": "map", "title": "...", "center": {lat, lng}, "zoom": 15, "markers": [...]}
+    """
+    return {
+        "type": "map",
+        "title": title,
+        "center": {"lat": center_lat, "lng": center_lng},
+        "zoom": zoom,
+        "markers": markers or [],
+        "description": description
+    }
+
+
+@tool
+def create_air_quality_block(
+    title: Annotated[str, "블록 제목 (예: '대기질 정보')"],
+    aqi: Annotated[int, "AQI 지수 (0-500)"],
+    category: Annotated[str, "등급 (좋음/보통/민감군나쁨/나쁨/매우나쁨)"],
+    pm25: Annotated[float, "PM2.5 농도 (µg/m³)"] = None,
+    pm10: Annotated[float, "PM10 농도 (µg/m³)"] = None,
+    recommendation: Annotated[str, "건강 권고사항"] = "",
+    description: Annotated[str, "추가 설명"] = ""
+) -> dict:
+    """대기질 정보 블록을 생성합니다.
+    
+    야외활동 적합도 등 방문 환경 정보를 제공할 때 사용합니다.
+    
+    AQI 등급:
+    - 1 (0-50): 좋음 (녹색)
+    - 2 (51-100): 보통 (노랑)
+    - 3 (101-150): 민감군나쁨 (주황)
+    - 4 (151-200): 나쁨 (빨강)
+    - 5 (201+): 매우나쁨 (자주)
+    
+    Returns:
+        {"type": "air_quality", "title": "...", "aqi": 45, "category": "좋음", ...}
+    """
+    # AQI에 따른 색상 결정
+    color_map = {
+        "좋음": "#00E400",
+        "보통": "#FFFF00", 
+        "민감군나쁨": "#FF7E00",
+        "나쁨": "#FF0000",
+        "매우나쁨": "#7E0023"
+    }
+    
+    return {
+        "type": "air_quality",
+        "title": title,
+        "aqi": aqi,
+        "category": category,
+        "category_color": color_map.get(category, "#808080"),
+        "pollutants": {
+            "pm25": pm25,
+            "pm10": pm10
+        },
+        "recommendation": recommendation,
+        "description": description
+    }
+
+
 # 도구 리스트 (Analyse Agent에서 사용)
 block_tools = [
     create_markdown_block,
     create_chart_block,
     create_table_block,
     create_image_block,
+    create_map_block,
+    create_air_quality_block,
 ]
 

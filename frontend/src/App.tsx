@@ -23,10 +23,36 @@ interface ExtendedBlockReportResponse extends BlockReportResponse {
   analysis_target_dates?: string[] | null;
   generated_at?: string; 
   parent_report_id?: number | null; 
-  organization_name?: string; // [ADDED] 파일명/UI 표시를 위해 추가
+  // organization_name은 BlockReportResponse에서 상속됨
 }
-interface ChartData { /* ... */ }
-interface RatingStatistics { /* ... */ }
+
+// ChartData 타입 정의
+interface ChartData { 
+  age_gender_ratio?: Array<{
+    cri_ym?: string;
+    [key: string]: any;
+  }>;
+}
+
+// RatingStatistics 타입 정의
+interface RatingStatistics {
+  total_reviews: number;
+  average_rating: number;
+  rating_distribution: {
+    "5": number;
+    "4": number;
+    "3": number;
+    "2": number;
+    "1": number;
+  };
+  rating_percentages: {
+    "5": number;
+    "4": number;
+    "3": number;
+    "2": number;
+    "1": number;
+  };
+}
 interface AdvancedReportResponse {
   id: number; organization_name: string; report_topic: string; final_report: string; 
   research_sources: string[]; analysis_summary: string; generated_at: string; 
@@ -72,7 +98,8 @@ const getReportHtml = (report: string) => {
 };
 
 // [NEW] 보고서 주제에서 기관명과 분석 기간을 제거하여 순수한 질문만 추출하는 헬퍼 함수
-const getCleanTopic = (report: AdvancedReportResponse | ExtendedBlockReportResponse | null): string => {
+// @ts-ignore - 추후 사용 예정
+const _getCleanTopic = (report: AdvancedReportResponse | ExtendedBlockReportResponse | null): string => {
     if (!report || !report.report_topic) return "";
     
     // 1. (분석 기간:...) 부분 제거
@@ -697,7 +724,7 @@ function App() {
 
             <div className="chart-section">
               <h3 className="section-title">월별 연령대별 성별 비율</h3>
-              {response.chart_data?.age_gender_ratio?.length > 0 ? ( 
+              {(response.chart_data?.age_gender_ratio?.length ?? 0) > 0 ? ( 
                 (() => {
                   const analysisDates = response.analysis_target_dates || [];
                   const ratioData = response.chart_data!.age_gender_ratio!; 

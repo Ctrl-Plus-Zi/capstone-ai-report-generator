@@ -1,0 +1,192 @@
+{
+  "_guide": {
+    "description": "API 번들 설정 파일 - Google API 전용 및 DB+API 혼합 번들",
+    "bundle_types": {
+      "api_only": "Google API만 사용하는 번들",
+      "mixed": "DB 쿼리 + API를 함께 사용하는 번들"
+    },
+    "variables": {
+      "$org": "기관명",
+      "$lat": "시설 위도 (DB에서 가져온 값)",
+      "$lng": "시설 경도 (DB에서 가져온 값)",
+      "$address": "시설 주소",
+      "$ref.키.필드": "이전 결과 참조"
+    }
+  },
+
+  "api_bundles": {
+    "대기질": {
+      "type": "api_only",
+      "description": "시설 위치의 대기질 정보",
+      "purpose": "AQI 지수, PM2.5/PM10 농도, 건강 권고사항을 대기질 카드로 표시. 야외활동 적합 여부.",
+      "api": "air_quality",
+      "params": {
+        "lat": "$lat",
+        "lng": "$lng"
+      },
+      "block": {
+        "type": "air_quality",
+        "title": "대기질 정보"
+      }
+    },
+
+    "시설위치지도": {
+      "type": "api_only",
+      "description": "시설 위치를 지도에 표시",
+      "purpose": "시설 위치를 중심으로 인터랙티브 지도 표시. 주변 환경 파악.",
+      "api": "maps_javascript",
+      "params": {
+        "center_lat": "$lat",
+        "center_lng": "$lng",
+        "zoom": 15
+      },
+      "block": {
+        "type": "map",
+        "title": "시설 위치"
+      }
+    },
+
+    "시설외관": {
+      "type": "api_only",
+      "description": "Street View로 시설 외관 이미지",
+      "purpose": "시설 입구/외관 사진을 이미지 블록으로 표시. 방문 전 시설 모습 미리보기.",
+      "api": "street_view",
+      "params": {
+        "lat": "$lat",
+        "lng": "$lng",
+        "size": "600x400",
+        "heading": 0
+      },
+      "block": {
+        "type": "image",
+        "title": "시설 외관"
+      }
+    },
+
+    "주변맛집_구글": {
+      "type": "api_only",
+      "description": "Google Places 기반 주변 맛집",
+      "purpose": "반경 1km 내 맛집 목록 (평점, 리뷰수, 주소). 테이블과 지도 마커로 표시.",
+      "api": "nearby_search",
+      "params": {
+        "lat": "$lat",
+        "lng": "$lng",
+        "radius": 1000,
+        "types": ["restaurant", "cafe"],
+        "max_results": 10
+      },
+      "block": {
+        "type": "table",
+        "title": "주변 맛집 (Google)"
+      }
+    },
+
+    "주변관광지": {
+      "type": "api_only",
+      "description": "Google Places 기반 주변 관광지",
+      "purpose": "반경 2km 내 관광명소, 공원, 박물관 등 테이블로 표시.",
+      "api": "nearby_search",
+      "params": {
+        "lat": "$lat",
+        "lng": "$lng",
+        "radius": 2000,
+        "types": ["tourist_attraction", "museum", "park"],
+        "max_results": 10
+      },
+      "block": {
+        "type": "table",
+        "title": "주변 관광지"
+      }
+    },
+
+    "대중교통접근성": {
+      "type": "api_only",
+      "description": "가까운 지하철역에서 시설까지 경로",
+      "purpose": "주요 지하철역에서 시설까지 대중교통 경로, 소요시간, 거리 비교 테이블.",
+      "api": "distance_matrix",
+      "params": {
+        "origins": ["$nearest_stations"],
+        "destination": "$address",
+        "mode": "transit"
+      },
+      "block": {
+        "type": "table",
+        "title": "대중교통 접근성"
+      }
+    }
+  },
+
+  "mixed_bundles": {
+    "주변정보종합": {
+      "type": "mixed",
+      "description": "DB 맛집 데이터 + Google 맛집/관광지",
+      "purpose": "DB의 NICE 맛집 데이터와 Google Places 실시간 데이터를 종합하여 더 풍부한 주변 정보 제공.",
+      "db_bundle": "주변맛집",
+      "api_bundle": "주변맛집_구글",
+      "merge_strategy": "union",
+      "block": {
+        "type": "table",
+        "title": "주변 맛집 종합"
+      }
+    },
+
+    "환경정보종합": {
+      "type": "mixed",
+      "description": "시설 위치 + 대기질",
+      "purpose": "시설의 지리적 정보와 현재 대기질 정보를 종합하여 방문 컨디션 분석.",
+      "db_queries": [
+        ["search", "sns_buzz_master_tbl", "slta_nm", "$org", "facility"]
+      ],
+      "api_bundles": ["시설위치지도", "대기질"],
+      "block": {
+        "type": "row",
+        "title": "현재 환경 정보",
+        "children": ["map", "air_quality"]
+      }
+    },
+
+    "상세접근성": {
+      "type": "mixed",
+      "description": "시설 좌표 + 주변역 경로 분석",
+      "purpose": "DB에서 시설 좌표를 가져와 Google Directions로 상세 경로 안내.",
+      "db_queries": [
+        ["search", "sns_buzz_master_tbl", "slta_nm", "$org", "facility"]
+      ],
+      "api_bundle": "대중교통접근성",
+      "coord_source": "facility.slta_xcrd, facility.slta_ycrd",
+      "block": {
+        "type": "table",
+        "title": "교통 접근성 상세"
+      }
+    }
+  },
+
+  "presets": {
+    "환경정보": {
+      "description": "대기질 등 환경 정보",
+      "bundles": ["대기질"]
+    },
+    "위치정보": {
+      "description": "지도, 주변 정보",
+      "bundles": ["시설위치지도", "주변맛집_구글", "주변관광지"]
+    },
+    "종합분석": {
+      "description": "환경 + 위치 + 접근성 종합",
+      "bundles": ["환경정보종합", "상세접근성"]
+    },
+    "빠른조회": {
+      "description": "핵심 정보만 빠르게",
+      "bundles": ["대기질", "시설위치지도"]
+    }
+  },
+
+  "org_api_preset_mapping": {
+    "예술의전당": "종합분석",
+    "세종문화회관": "종합분석",
+    "국립현대미술관": "위치정보",
+    "국립중앙박물관": "위치정보",
+    "롯데월드": "종합분석",
+    "에버랜드": "종합분석",
+    "경복궁": "환경정보"
+  }
+}

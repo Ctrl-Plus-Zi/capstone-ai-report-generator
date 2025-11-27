@@ -17,6 +17,10 @@ class Settings(BaseSettings):
     llm_model: str = "gpt-4"
     llm_temperature: float = 0.3
     llm_max_tokens: int = 1500
+    
+    # Google Cloud Platform API 설정
+    # Maps JavaScript, Places, Geocoding, Directions, Distance Matrix, Street View, Air Quality
+    google_maps_api_key: str | None = None
 
     class Config:
         env_file = ".env"

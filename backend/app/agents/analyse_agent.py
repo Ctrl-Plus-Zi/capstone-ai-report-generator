@@ -55,6 +55,8 @@ def _prepare_data_for_analysis(research_payload: List[dict]) -> str:
     
     각 데이터의 핵심 정보와 실제 값을 포함하여 LLM이 차트/테이블을 만들 수 있도록 합니다.
     수집 이유(reasoning)도 포함하여 데이터의 맥락을 제공합니다.
+    
+    Note: api_bundle.* 데이터는 이미 블록으로 변환되므로 LLM 프롬프트에서 제외합니다.
     """
     if not research_payload:
         return "수집된 데이터가 없습니다."
@@ -63,6 +65,11 @@ def _prepare_data_for_analysis(research_payload: List[dict]) -> str:
     
     for item in research_payload:
         tool_name = item.get("tool", "unknown")
+        
+        # Google API 데이터는 이미 블록으로 변환되므로 LLM 프롬프트에서 제외
+        if tool_name.startswith("google_api."):
+            continue
+        
         count = item.get("count", 0)
         data = item.get("data", []) or item.get("sample", [])
         stats = item.get("stats", {})
@@ -204,6 +211,184 @@ def _create_blocks_from_calculated_stats(
                         "description": gender_insight
                     })
                     logger.info(f"[ANALYSE_AGENT] 사전 계산 통계 → 성별 차트 생성 (type={chart_type})")
+            
+    return blocks
+
+
+def _create_single_google_block(
+    data: dict,
+    block_type: str,
+    block_config: dict,
+    reasoning: str,
+    tool_name: str
+) -> dict:
+    """단일 Google API 응답에서 블록 생성 헬퍼"""
+    
+    # 블록 타입별 기본 제목 (혼합 번들에서 block_config가 상위 설정일 수 있으므로)
+    DEFAULT_TITLES = {
+        "map": "시설 위치",
+        "air_quality": "대기질 정보",
+        "image": "시설 외관",
+        "table": "주변 정보"
+    }
+    
+    # block_config의 type이 현재 블록 타입과 다르면 기본 제목 사용
+    # (혼합 번들의 경우 block_config.type이 "row"일 수 있음)
+    config_type = block_config.get("type", "")
+    if config_type != block_type:
+        title = DEFAULT_TITLES.get(block_type, "")
+    else:
+        title = block_config.get("title", DEFAULT_TITLES.get(block_type, ""))
+    
+    if block_type == "map":
+        center = data.get("center", {})
+        if center:
+            return {
+                "type": "map",
+                "title": title,
+                "center": center,
+                "zoom": data.get("zoom", 15),
+                "markers": data.get("markers", []),
+                "description": reasoning
+            }
+    
+    elif block_type == "air_quality":
+        aqi = data.get("aqi")
+        if aqi is not None:
+            category = data.get("category", "")
+            color_map = {
+                "좋음": "#00E400",
+                "보통": "#FFFF00", 
+                "민감군나쁨": "#FF7E00",
+                "나쁨": "#FF0000",
+                "매우나쁨": "#7E0023"
+            }
+            # 혼합 번들인 경우 기본 제목 사용
+            aq_title = title if title else "대기질 정보"
+            return {
+                "type": "air_quality",
+                "title": aq_title,
+                "aqi": aqi,
+                "category": category,
+                "category_color": data.get("category_color") or color_map.get(category, "#808080"),
+                "pollutants": data.get("pollutants", {}),
+                "recommendation": data.get("health_recommendation", "") or data.get("recommendation", ""),
+                "description": reasoning
+            }
+    
+    elif block_type == "image":
+        url = data.get("url") or data.get("static_map_url")
+        if url:
+            img_title = title if title else "시설 외관"
+            return {
+                "type": "image",
+                "url": url,
+                "alt": img_title,
+                "caption": reasoning
+            }
+    
+    elif block_type == "table":
+        # Distance Matrix 또는 nearby_search 결과 처리
+        rows = data.get("rows", [])
+        headers = data.get("headers", [])
+        
+        # Distance Matrix 응답 처리
+        if "origins" in data and not rows:
+            origins = data.get("origins", [])
+            destinations = data.get("destinations", [])
+            dm_rows = data.get("rows", [])
+            
+            if dm_rows:
+                headers = ["출발지", "도착지", "소요시간", "거리"]
+                rows = []
+                for i, origin in enumerate(origins):
+                    for j, dest in enumerate(destinations):
+                        if i < len(dm_rows) and j < len(dm_rows[i].get("elements", [])):
+                            elem = dm_rows[i]["elements"][j]
+                            if elem.get("status") == "OK":
+                                duration = elem.get("duration", {}).get("text", "-")
+                                distance = elem.get("distance", {}).get("text", "-")
+                                rows.append([origin, dest, duration, distance])
+        
+        if rows and headers:
+            table_title = title if title else "접근성 정보"
+            return {
+                "type": "table",
+                "title": table_title,
+                "headers": headers,
+                "rows": rows,
+                "description": reasoning
+            }
+    
+    return None
+
+
+def _create_blocks_from_google_api(research_payload: List[dict]) -> List[dict]:
+    """
+    research_payload에서 Google API 결과를 감지하여 직접 블록 생성합니다.
+    
+    Search Agent에서 google_api.* 형태로 추가된 Google API 결과를
+    LLM 호출 없이 바로 map, air_quality 블록으로 변환합니다.
+    
+    Args:
+        research_payload: Search Agent에서 수집된 데이터 목록
+    
+    Returns:
+        생성된 Google API 블록 목록 (map, air_quality, image, table)
+    """
+    blocks = []
+    
+    for item in research_payload:
+        tool_name = item.get("tool", "")
+        
+        # google_api.* 형태의 도구만 처리
+        if not tool_name.startswith("google_api."):
+            continue
+        
+        api_result = item.get("data", {})
+        block_config = item.get("block_config", {})
+        reasoning = item.get("reasoning", "")
+        
+        # 혼합 번들의 경우 각 API 결과를 개별 처리
+        if "api_results" in api_result:
+            api_results = api_result.get("api_results", [])
+            for api_item in api_results:
+                data = api_item.get("data", {})
+                if not data.get("success", True):
+                    continue
+                
+                # 데이터에서 블록 타입 추론 (API 응답 구조 기반)
+                if data.get("type") == "map" or "center" in data:
+                    block_type = "map"
+                elif "aqi" in data:
+                    block_type = "air_quality"
+                elif "url" in data and not "routes" in data:
+                    block_type = "image"
+                elif "rows" in data or "origins" in data:
+                    block_type = "table"
+                else:
+                    continue
+                
+                # 블록 생성을 위한 데이터 처리
+                generated_block = _create_single_google_block(data, block_type, block_config, reasoning, tool_name)
+                if generated_block:
+                    blocks.append(generated_block)
+            continue
+        
+        # 단일 API 번들
+        data = api_result
+        block_type = block_config.get("type", "")
+        
+        # success 체크
+        if not data.get("success", True):
+            logger.warning(f"[ANALYSE_AGENT] Google API 실패: {tool_name}")
+            continue
+        
+        # 헬퍼 함수로 블록 생성
+        generated_block = _create_single_google_block(data, block_type, block_config, reasoning, tool_name)
+        if generated_block:
+            blocks.append(generated_block)
+            logger.info(f"[ANALYSE_AGENT] Google API → {generated_block['type']} 블록 생성: {generated_block.get('title', '')}")
     
     return blocks
 
@@ -225,8 +410,8 @@ def _assign_block_ids(blocks: List[dict]) -> List[dict]:
         block_copy = block.copy()
         block_type = block.get("type", "")
         
-        # 데이터 블록(chart, table, image)에만 id 부여
-        if block_type in ("chart", "table", "image"):
+        # 데이터 블록(chart, table, image, map, air_quality)에 id 부여
+        if block_type in ("chart", "table", "image", "map", "air_quality"):
             block_copy["id"] = f"block_{block_counter}"
             block_counter += 1
         
@@ -255,8 +440,13 @@ def _generate_paired_markdowns(
     Returns:
         짝 마크다운 블록 배열: [{"type": "markdown", "paired_with": "block_1", "content": "..."}]
     """
-    # id가 있는 블록만 추출
-    data_blocks = [b for b in blocks if b.get("id")]
+    # id가 있는 블록 중 짝 마크다운이 필요한 블록만 추출
+    # map, air_quality는 이미 자체적으로 정보를 충분히 제공하므로 제외
+    SKIP_PAIRED_MARKDOWN_TYPES = {"map", "air_quality", "markdown"}
+    data_blocks = [
+        b for b in blocks 
+        if b.get("id") and b.get("type") not in SKIP_PAIRED_MARKDOWN_TYPES
+    ]
     
     if not data_blocks:
         return []
@@ -345,6 +535,15 @@ def _summarize_block_data(block: dict) -> str:
         return f"컬럼: {headers}, 행 수: {row_count}, 샘플: {sample}"
     elif block_type == "image":
         return f"이미지: {block.get('alt', '')}, 캡션: {block.get('caption', '')}"
+    elif block_type == "map":
+        center = block.get("center", {})
+        markers = block.get("markers", [])
+        return f"지도: 중심({center.get('lat', 0):.4f}, {center.get('lng', 0):.4f}), 마커 {len(markers)}개"
+    elif block_type == "air_quality":
+        aqi = block.get("aqi", 0)
+        category = block.get("category", "")
+        pollutants = block.get("pollutants", {})
+        return f"대기질: AQI {aqi} ({category}), PM2.5: {pollutants.get('pm25', '-')}, PM10: {pollutants.get('pm10', '-')}"
     return ""
 
 
@@ -361,7 +560,7 @@ def _generate_comprehensive_analysis(
     
     Args:
         llm: LangChain LLM 인스턴스
-        data_blocks: id가 부여된 데이터 블록들 (chart, table, image)
+        data_blocks: id가 부여된 데이터 블록들 (chart, table, image, map, air_quality)
         paired_markdowns: 짝 마크다운 블록들
         report_type: "user" 또는 "operator"
         org_name: 기관명
@@ -459,7 +658,7 @@ def _generate_comprehensive_analysis(
                 
                 if content:
                     comprehensive_blocks.append({
-                        "type": "markdown",
+            "type": "markdown",
                         "role": "comprehensive",
                         "section": section_name,
                         "content": content
@@ -584,6 +783,26 @@ def _build_analysis_prompt(
         - alt: 대체 텍스트
         - caption: 캡션
         
+        ## 5. create_map_block
+        인터랙티브 지도 블록 생성. 시설 위치/주변 정보 표시에 사용.
+        - title: 지도 제목
+        - center_lat: 지도 중심 위도
+        - center_lng: 지도 중심 경도
+        - zoom: 줌 레벨 (1-20, 기본 15)
+        - markers: 마커 배열 [{{"lat": 37.5, "lng": 127.0, "label": "시설명", "type": "facility"}}, ...]
+          - type: "facility" (시설), "restaurant" (맛집), "attraction" (관광지), "transit" (교통)
+        - description: 지도 설명
+        
+        ## 6. create_air_quality_block
+        대기질 정보 블록 생성. 야외활동 적합도/방문 환경 정보 제공에 사용.
+        - title: 블록 제목
+        - aqi: AQI 지수 (0-500)
+        - category: 등급 ("좋음", "보통", "민감군나쁨", "나쁨", "매우나쁨")
+        - pm25: PM2.5 농도 (µg/m³)
+        - pm10: PM10 농도 (µg/m³)
+        - recommendation: 건강 권고사항
+        - description: 추가 설명
+        
         {image_instruction}
         
         {bundle_instructions}
@@ -630,8 +849,9 @@ def create_analyse_agent(tool_llm, summary_llm, toolkit):
     5. 분석 요약(analysis_findings) 생성
     """
     
-    # 사용할 도구들
-    tools = block_tools  # [create_markdown_block, create_chart_block, create_table_block, create_image_block]
+    # 사용할 도구들 (block_tools.py에서 정의)
+    # [create_markdown_block, create_chart_block, create_table_block, create_image_block, create_map_block, create_air_quality_block]
+    tools = block_tools
 
     def analyse_agent_node(state):
         logger.info("[ANALYSE_AGENT] ====== 시작 ======")
@@ -660,6 +880,12 @@ def create_analyse_agent(tool_llm, summary_llm, toolkit):
             logger.info(f"[ANALYSE_AGENT] 사전 계산 통계에서 {len(pre_generated_blocks)}개 블록 생성")
             if block_configs:
                 logger.info(f"[ANALYSE_AGENT] 블록 설정 사용: {list(block_configs.keys())}")
+        
+        # === 단계 1.5: Google API 데이터에서 블록 직접 생성 (LLM 스킵) ===
+        google_api_blocks = _create_blocks_from_google_api(research_payload)
+        if google_api_blocks:
+            pre_generated_blocks.extend(google_api_blocks)
+            logger.info(f"[ANALYSE_AGENT] Google API에서 {len(google_api_blocks)}개 블록 생성")
         
         # === 단계 2: 데이터 준비 (LLM용) ===
         data_text = _prepare_data_for_analysis(research_payload)

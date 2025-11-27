@@ -1,0 +1,122 @@
+{
+  "_guide": {
+    "description": "Google Cloud Platform API 설정 파일",
+    "env_var": "GOOGLE_MAPS_API_KEY 환경변수 필요",
+    "docs": {
+      "maps": "https://developers.google.com/maps/documentation",
+      "places": "https://developers.google.com/maps/documentation/places/web-service",
+      "air_quality": "https://developers.google.com/maps/documentation/air-quality"
+    }
+  },
+
+  "apis": {
+    "geocoding": {
+      "name": "Geocoding API",
+      "description": "주소 ↔ 좌표 변환",
+      "endpoint": "https://maps.googleapis.com/maps/api/geocode/json",
+      "method": "GET",
+      "params": ["address", "latlng", "language"],
+      "response_fields": ["formatted_address", "geometry.location", "place_id"],
+      "cost_per_1000": 5
+    },
+
+    "nearby_search": {
+      "name": "Places Nearby Search (New)",
+      "description": "주변 장소 검색",
+      "endpoint": "https://places.googleapis.com/v1/places:searchNearby",
+      "method": "POST",
+      "headers": ["X-Goog-Api-Key", "X-Goog-FieldMask"],
+      "body_params": ["locationRestriction", "includedTypes", "maxResultCount", "languageCode"],
+      "response_fields": ["displayName", "rating", "userRatingCount", "formattedAddress", "location", "types", "photos"],
+      "cost_per_1000": 32
+    },
+
+    "place_details": {
+      "name": "Place Details (New)",
+      "description": "장소 상세 정보",
+      "endpoint": "https://places.googleapis.com/v1/places/{place_id}",
+      "method": "GET",
+      "headers": ["X-Goog-Api-Key", "X-Goog-FieldMask"],
+      "response_fields": ["displayName", "rating", "userRatingCount", "reviews", "regularOpeningHours", "websiteUri", "nationalPhoneNumber"],
+      "cost_per_1000": 17
+    },
+
+    "place_photos": {
+      "name": "Place Photos",
+      "description": "장소 사진",
+      "endpoint": "https://places.googleapis.com/v1/{photo_name}/media",
+      "method": "GET",
+      "params": ["maxWidthPx", "maxHeightPx"],
+      "cost_per_1000": 7
+    },
+
+    "directions": {
+      "name": "Directions API",
+      "description": "경로 안내",
+      "endpoint": "https://maps.googleapis.com/maps/api/directions/json",
+      "method": "GET",
+      "params": ["origin", "destination", "mode", "language", "alternatives"],
+      "modes": ["transit", "driving", "walking", "bicycling"],
+      "response_fields": ["routes.legs.distance", "routes.legs.duration", "routes.legs.steps"],
+      "cost_per_1000": 5
+    },
+
+    "distance_matrix": {
+      "name": "Distance Matrix API",
+      "description": "다중 출발지-도착지 거리/시간",
+      "endpoint": "https://maps.googleapis.com/maps/api/distancematrix/json",
+      "method": "GET",
+      "params": ["origins", "destinations", "mode", "language"],
+      "response_fields": ["rows.elements.distance", "rows.elements.duration", "rows.elements.status"],
+      "cost_per_1000": 5
+    },
+
+    "street_view": {
+      "name": "Street View Static API",
+      "description": "거리뷰 이미지",
+      "endpoint": "https://maps.googleapis.com/maps/api/streetview",
+      "method": "GET",
+      "params": ["location", "size", "heading", "pitch", "fov"],
+      "response_type": "image",
+      "cost_per_1000": 7
+    },
+
+    "air_quality": {
+      "name": "Air Quality API",
+      "description": "대기질 정보",
+      "endpoint": "https://airquality.googleapis.com/v1/currentConditions:lookup",
+      "method": "POST",
+      "body_params": ["location", "extraComputations", "languageCode"],
+      "response_fields": ["indexes.aqi", "indexes.category", "indexes.dominantPollutant", "pollutants", "healthRecommendations"],
+      "cost_per_1000": 5
+    },
+
+    "maps_static": {
+      "name": "Maps Static API",
+      "description": "정적 지도 이미지",
+      "endpoint": "https://maps.googleapis.com/maps/api/staticmap",
+      "method": "GET",
+      "params": ["center", "zoom", "size", "markers", "maptype"],
+      "response_type": "image",
+      "cost_per_1000": 2
+    }
+  },
+
+  "place_types": {
+    "음식점": ["restaurant", "cafe", "bakery", "bar"],
+    "관광지": ["tourist_attraction", "museum", "park", "amusement_park"],
+    "교통": ["subway_station", "train_station", "bus_station"],
+    "숙박": ["hotel", "lodging"],
+    "쇼핑": ["shopping_mall", "department_store"],
+    "문화": ["art_gallery", "performing_arts_theater", "movie_theater"]
+  },
+
+  "aqi_categories": {
+    "1": {"label": "좋음", "color": "#00E400", "advice": "야외 활동 적합"},
+    "2": {"label": "보통", "color": "#FFFF00", "advice": "민감군 주의"},
+    "3": {"label": "민감군 나쁨", "color": "#FF7E00", "advice": "민감군 야외활동 자제"},
+    "4": {"label": "나쁨", "color": "#FF0000", "advice": "야외활동 자제 권고"},
+    "5": {"label": "매우 나쁨", "color": "#7E0023", "advice": "외출 자제"}
+  }
+}
+

@@ -597,7 +597,7 @@ body:has(.saved-list-sidebar.closed) .content-wrapper {
   color: #1f2937;
   font-weight: 500;
   word-break: break-word;
-}* 항목 간 간격 */
+}
 
 .chart-section,
 .rating-chart-section {

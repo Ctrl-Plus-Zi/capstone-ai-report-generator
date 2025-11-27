@@ -1,5 +1,9 @@
 // Block Types for Server-Driven UI
 
+// Google API 블록 타입 임포트
+import type { MapBlock, AirQualityBlock } from './googleBlocks';
+export type { MapBlock, AirQualityBlock } from './googleBlocks';
+
 export interface MarkdownBlock {
   type: 'markdown';
   content: string;
@@ -36,10 +40,10 @@ export interface TableBlock {
 export interface RowBlock {
   type: 'row';
   gap?: string;
-  children: (MarkdownBlock | ChartBlock | ImageBlock | TableBlock)[];
+  children: (MarkdownBlock | ChartBlock | ImageBlock | TableBlock | MapBlock | AirQualityBlock)[];
 }
 
-export type BlockType = MarkdownBlock | ChartBlock | ImageBlock | TableBlock | RowBlock;
+export type BlockType = MarkdownBlock | ChartBlock | ImageBlock | TableBlock | RowBlock | MapBlock | AirQualityBlock;
 
 export interface BlockReportResponse {
   id: number;
