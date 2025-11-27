@@ -19,7 +19,7 @@ ChartJS.register(
   Legend
 );
 
-interface RatingStatistics {
+export interface RatingStatistics {
   total_reviews: number;
   average_rating: number;
   rating_distribution: {

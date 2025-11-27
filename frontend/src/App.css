@@ -1,64 +1,114 @@
-/* App.css */
-
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@100..900&display=swap');
 
-/* 전체 레이아웃 스타일 */
+/* --- 기본 레이아웃 --- */
 .app-container {
+  display: flex;
   min-height: 100vh;
-  background-color: #f5f5f5; 
-  padding: 40px 20px; 
-  font-family: 'Noto Sans KR', sans-serif;
+  background-color: #ffffff;
+  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
 }
 
 .content-wrapper {
-  max-width: 720px; /* 보고서 가로폭을 1.2배로 확대 (600px * 1.2) */
+  flex: 1;
+  max-width: 800px;
   margin: 0 auto;
-  transition: margin-right 0.3s ease; /* 사이드바 열고 닫을 때 부드러운 전환 */
+  padding: 40px 20px;
+  padding-right: 340px; /* 사이드바 공간 확보 */
+  transition: padding-right 0.3s ease;
 }
 
-/* --- 제목 및 안내 문구 스타일 --- */
+/* 사이드바가 닫혔을 때 본문 넓게 쓰기 */
+.saved-list-sidebar.closed ~ .content-wrapper,
+body:has(.saved-list-sidebar.closed) .content-wrapper {
+  padding-right: 20px;
+}
+
+/* --- 타이틀 및 헤더 --- */
 .main-title {
-  text-align: center;
-  margin-bottom: 5px; /* 제목과 서브타이틀 사이 간격 좁게 */
-  color: #333;
   font-size: 28px;
+  font-weight: 700;
+  color: #1f2937;
+  margin-bottom: 10px;
+  text-align: center;
 }
 
 .subtitle {
   text-align: center;
-  margin-bottom: 30px; /* 제목 아래 안내 문구 간격 */
-  color: #666;
-  font-size: 14px;
+  color: #6b7280;
+  margin-bottom: 40px;
 }
 
-/* --- 입력 폼 스타일 (중앙 카드) --- */
+/* --- 단계 표시 (Stepper) --- */
+.stepper { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; max-width: 600px; margin-left: auto; margin-right: auto; }
+.step { display: flex; flex-direction: column; align-items: center; flex: 1; position: relative; }
+.step:not(:last-child)::after {
+  content: ''; position: absolute; top: 12px; left: 50%; width: 100%; height: 2px; background-color: #eee; z-index: 0;
+}
+.step.active:not(:last-child)::after { background-color: #6483d1; }
+.circle { width: 24px; height: 24px; border-radius: 50%; background-color: #eee; display: flex; align-items: center; justify-content: center; z-index: 1; color: #fff; font-weight: bold; }
+.step.active .circle { background-color: #6483d1; }
+.label { margin-top: 8px; font-size: 14px; color: #666; white-space: nowrap; }
+.step.active .label { color: #6483d1; font-weight: bold; }
+
+
+/* --- 입력 폼 카드 --- */
 .card-form {
-  background-color: white;
+  background: white;
   padding: 30px;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08); 
-  margin-bottom: 20px;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e7eb;
 }
 
-/* --- 폼 그룹 및 라벨 스타일 (아이콘 포함) --- */
 .form-group {
-  margin-bottom: 30px; /* 그룹 간 간격 늘림 */
+  margin-bottom: 30px;
 }
 
 .label-container {
   display: flex;
   align-items: center;
+  gap: 8px;
   margin-bottom: 10px;
 }
 
 .form-label {
-  font-weight: bold;
-  color: #333;
-  font-size: 16px;
-  margin-left: 8px; /* 아이콘과 텍스트 간격 */
+  font-weight: 600;
+  color: #374151;
 }
 
-/* --- 입력 필드/텍스트 영역 공통 스타일 --- */
+/* 기관 선택 버튼 그룹 */
+.org-button-group {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.org-select-button {
+  padding: 8px 16px;
+  border: 2px solid #ddd;
+  border-radius: 6px;
+  background-color: #ffffff;
+  color: #333;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+}
+
+.org-select-button:hover {
+  border-color: #6483d1;
+  background-color: #f0f4ff;
+}
+
+.org-select-button.selected {
+  border-color: #6483d1;
+  background-color: #e8f0fe;
+  color: #6483d1;
+  font-weight: 600;
+}
+
 .form-input {
   width: 100%;
   padding: 12px;
@@ -77,11 +127,10 @@
 }
 
 .form-textarea {
-  height: 200px; /* 높이 크게 조정 */
-  resize: none; /* 크기 조절 방지 */
+  height: 200px;
+  resize: none;
 }
 
-/* --- 상세 안내 문구 (회색) --- */
 .guidance-text {
   font-size: 12px;
   color: #999;
@@ -94,41 +143,7 @@
   margin-right: 5px;
 }
 
-/* 기관 선택 버튼 그룹 */
-/* 기관 선택 버튼 그룹 */
-.org-button-group {
-  display: grid; /* flex에서 grid로 변경 */
-  grid-template-columns: repeat(4, 1fr); /* 4개의 동일한 너비의 컬럼 생성 */
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.org-select-button {
-  padding: 8px 16px;
-  border: 2px solid #ddd;
-  border-radius: 6px;
-  background-color: #ffffff;
-  color: #333;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  text-align: center; /* 텍스트를 중앙 정렬하여 더 깔끔하게 보이도록 함 */
-}
-
-.org-select-button:hover {
-  border-color: #6483d1;
-  background-color: #f0f4ff;
-}
-
-.org-select-button.selected {
-  border-color: #6483d1;
-  background-color: #e8f0fe;
-  color: #6483d1;
-  font-weight: 600;
-}
-
-/* 보고서 타입 토글 스위치 스타일 */
+/* 보고서 유형 토글 */
 .report-type-toggle {
   display: flex;
   gap: 12px;
@@ -181,33 +196,16 @@
   color: #1976d2;
 }
 
-/* 평점 차트 섹션 */
-.rating-chart-section {
-  margin-bottom: 20px;
-  padding: 20px;
-  background-color: #f8f9fa;
-  border-radius: 8px;
-  border: 1px solid #e9ecef;
+/* 배지 (NEW 등) */
+.badge-new {
+  font-size: 12px;
+  color: #059669;
+  background-color: #d1fae5;
+  padding: 2px 8px;
+  border-radius: 4px;
 }
 
-.rating-chart-title {
-  display: block;
-  margin-bottom: 15px;
-  color: #333;
-  font-weight: bold;
-  font-size: 18px;
-}
-
-/* --- 예시 텍스트 스타일 --- */
-.placeholder-examples {
-    font-size: 14px;
-    color: #888;
-    line-height: 1.5;
-    margin-top: 10px;
-    white-space: pre-wrap;
-}
-
-/* --- 버튼 스타일 (이미지에 없으므로 깔끔하게 유지) --- */
+/* 제출 버튼 */
 .submit-button {
   width: 100%;
   padding: 15px;
@@ -224,307 +222,21 @@
   background-color: #6483d1;
 }
 
+.submit-button-active {
+  background-color: #6483d1;
+  color: white;
+}
+
+.submit-button-active:hover {
+  background-color: #5a73b8;
+}
+
 .submit-button-disabled {
   background-color: #6483d1;
   cursor: not-allowed;
   opacity: 0.6;
 }
 
-.button-icon {
-  margin-right: 8px;
-}
-
-/* --- 오류 및 결과 섹션 (오른쪽 이미지에는 없지만 기존 기능을 유지하며 스타일만 조정) --- */
-.error-message {
-  background-color: #ffebee;
-  color: #c62828;
-  padding: 15px;
-  border-radius: 4px;
-  margin-bottom: 20px;
-  border: 1px solid #ef5350;
-}
-
-.result-card {
-  background-color: white;
-  padding: 30px;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-}
-
-.result-title {
-  font-size: 24px;
-  margin-top: 0;
-  margin-bottom: 20px;
-  color: #333;
-  border-bottom: 2px solid #6483d1;
-  padding-bottom: 10px;
-}
-
-/* 정보 요약 스타일 */
-.info-summary {
-  margin-bottom: 20px;
-  padding: 15px;
-  background-color: #f8f9fa;
-  border-radius: 4px;
-  font-size: 14px;
-  color: #666;
-}
-
-/* 참고 출처 스타일 */
-.sources-section {
-  margin-bottom: 20px;
-  padding: 15px;
-  background-color: #e3f2fd;
-  border-radius: 4px;
-}
-
-.sources-title {
-  display: block;
-  margin-bottom: 10px;
-  color: #6483d1;
-  font-weight: bold;
-}
-
-.sources-list {
-  margin: 0;
-  padding-left: 20px;
-  list-style-type: disc;
-}
-
-.sources-list li {
-  margin-bottom: 5px;
-}
-
-.source-link {
-  color: #6483d1;
-  text-decoration: none;
-}
-
-.more-sources {
-  margin-top: 10px;
-  font-size: 12px;
-  color: #666;
-}
-
-/* 분석 요약 스타일 */
-.analysis-summary {
-  margin-bottom: 20px;
-  padding: 15px;
-  background-color: #fff3e0;
-  border-radius: 4px;
-}
-
-.analysis-title {
-  display: block;
-  margin-bottom: 10px;
-  color: #f57c00;
-  font-weight: bold;
-}
-
-.analysis-content {
-  line-height: 1.6;
-}
-
-/* 분석 요약 마크다운 스타일링 */
-.analysis-content h1,
-.analysis-content h2,
-.analysis-content h3,
-.analysis-content h4,
-.analysis-content h5,
-.analysis-content h6 {
-  margin-top: 20px;
-  margin-bottom: 12px;
-  font-weight: 600;
-  line-height: 1.25;
-  color: #333;
-}
-
-.analysis-content h1 {
-  font-size: 1.75em;
-  border-bottom: 1px solid #eaecef;
-  padding-bottom: 0.3em;
-}
-
-.analysis-content h2 {
-  font-size: 1.5em;
-  border-bottom: 1px solid #eaecef;
-  padding-bottom: 0.3em;
-}
-
-.analysis-content h3 {
-  font-size: 1.25em;
-}
-
-.analysis-content p {
-  margin-bottom: 12px;
-}
-
-.analysis-content ul,
-.analysis-content ol {
-  margin-bottom: 12px;
-  padding-left: 30px;
-}
-
-.analysis-content li {
-  margin-bottom: 6px;
-}
-
-.analysis-content strong {
-  font-weight: 600;
-  color: #333;
-}
-
-.analysis-content em {
-  font-style: italic;
-}
-
-/* 최종 보고서 스타일 */
-.final-report-section {
-  margin-bottom: 20px;
-  padding: 20px;
-  background-color: #fafafa;
-  border-radius: 4px;
-  border-left: 4px solid #6483d1;
-}
-
-.final-report-title {
-  display: block;
-  margin-bottom: 15px;
-  font-size: 18px;
-  color: #333;
-  font-weight: bold;
-}
-
-.final-report-content {
-  line-height: 1.8;
-  font-size: 16px;
-  color: #333;
-}
-
-/* 마크다운 스타일링 */
-.final-report-content h1,
-.final-report-content h2,
-.final-report-content h3,
-.final-report-content h4,
-.final-report-content h5,
-.final-report-content h6 {
-  margin-top: 24px;
-  margin-bottom: 16px;
-  font-weight: 600;
-  line-height: 1.25;
-  color: #333;
-}
-
-.final-report-content h1 {
-  font-size: 2em;
-  border-bottom: 1px solid #eaecef;
-  padding-bottom: 0.3em;
-}
-
-.final-report-content h2 {
-  font-size: 1.5em;
-  border-bottom: 1px solid #eaecef;
-  padding-bottom: 0.3em;
-}
-
-.final-report-content h3 {
-  font-size: 1.25em;
-}
-
-.final-report-content p {
-  margin-bottom: 16px;
-}
-
-.final-report-content ul,
-.final-report-content ol {
-  margin-bottom: 16px;
-  padding-left: 30px;
-}
-
-.final-report-content li {
-  margin-bottom: 8px;
-}
-
-.final-report-content strong {
-  font-weight: 600;
-  color: #333;
-}
-
-.final-report-content em {
-  font-style: italic;
-}
-
-.final-report-content code {
-  background-color: #f6f8fa;
-  border-radius: 3px;
-  padding: 2px 6px;
-  font-size: 85%;
-  font-family: 'Courier New', monospace;
-}
-
-.final-report-content pre {
-  background-color: #f6f8fa;
-  border-radius: 6px;
-  padding: 16px;
-  overflow-x: auto;
-  margin-bottom: 16px;
-}
-
-.final-report-content pre code {
-  background-color: transparent;
-  padding: 0;
-}
-
-.final-report-content blockquote {
-  border-left: 4px solid #dfe2e5;
-  padding-left: 16px;
-  margin: 16px 0;
-  color: #6a737d;
-}
-
-.final-report-content a {
-  color: #0366d6;
-  text-decoration: none;
-}
-
-.final-report-content a:hover {
-  text-decoration: underline;
-}
-
-.final-report-content hr {
-  height: 0.25em;
-  background-color: #e1e4e8;
-  border: 0;
-  margin: 24px 0;
-}
-
-.final-report-content table {
-  border-collapse: collapse;
-  margin-bottom: 16px;
-  width: 100%;
-}
-
-.final-report-content table th,
-.final-report-content table td {
-  border: 1px solid #dfe2e5;
-  padding: 8px 13px;
-}
-
-.final-report-content table th {
-  background-color: #f6f8fa;
-  font-weight: 600;
-}
-
-/* 생성일시 스타일 */
-.generated-at {
-  padding: 10px;
-  background-color: #e8f5e9;
-  border-radius: 4px;
-  font-size: 12px;
-  color: #2e7d32;
-}
-
-/* 분석 요청 중일 때 */
 .loading-spinner {
   width: 16px;
   height: 16px;
@@ -536,26 +248,21 @@
 }
 
 @keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+  to { transform: rotate(360deg); }
 }
 
-
-/* 파일 저장 */
-/* 최근 생성된 보고서 목록 접기/ 펼치기 */
-/* 사이드바 */
+/* --- 사이드바 (Saved Reports) --- */
 .saved-list-sidebar {
   position: fixed;
-  top: 0; /* 화면 최상단 */
+  top: 0;
   right: 0;
-  width: 310px; /* 원래 크기 유지 */
-  height: 100vh; /* 화면 전체 높이 */
-  background-color: #fff;
-  border-left: 1px solid #ddd;
-  box-shadow: -2px 0 5px rgba(0,0,0,0.1);
+  width: 320px;
+  height: 100vh;
+  background-color: #f9fafb;
+  border-left: 1px solid #e5e7eb;
+  padding: 20px;
   overflow-y: auto;
-  transition: transform 0.3s ease, opacity 0.3s ease;
+  transition: transform 0.3s ease;
   z-index: 100;
 }
 
@@ -563,125 +270,183 @@
   transform: translateX(100%);
 }
 
-.saved-content {
-  padding: 60px 20px 20px 20px; /* 상단에 토글 버튼 공간 확보 */
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+/* 새 보고서 작성 버튼 */
+.btn-new-report {
+  flex: 1;
+  padding: 10px 16px;
+  background-color: #6483d1;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: background-color 0.2s;
+}
+
+.btn-new-report:hover {
+  background-color: #5a73b8;
 }
 
 .saved-toggle-btn {
-  position: absolute;   /* 사이드바 내부 기준 */
-  top: 20px;         /* 위쪽 위치 */
-  right: 20px;       /* 오른쪽 위치 */
-  background: #6483d1;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  padding: 6px 10px;
+  flex-shrink: 0;
+  padding: 8px 12px;
+  background-color: white;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
   cursor: pointer;
-  transition: transform 0.3s ease, background-color 0.3s ease;
-  z-index: 200;      /* 사이드바보다 위에 표시 */
 }
 
-.saved-toggle-btn:hover {
-  background-color: #6483d1;
-  box-shadow: 0 4px 12px #9eb0dc;
-  transform: scale(1.05);
-}
-
-/* 사이드바가 닫혔을 때 외부에 표시되는 토글 버튼 */
-.saved-toggle-btn-external {
+/* 사이드바 닫혔을 때 플로팅 버튼들 */
+.sidebar-closed-controls {
   position: fixed;
-  top: 20px;
   right: 0;
-  background: #6483d1;
-  color: white;
+  top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 1000;
+  align-items: flex-end;
+  pointer-events: none; /* 버튼 외 영역 클릭 통과 */
+}
+
+.sidebar-closed-btn {
+  pointer-events: auto;
+  padding: 10px 16px;
   border: none;
-  border-radius: 4px 0 0 4px;
-  padding: 6px 10px;
+  border-radius: 6px 0 0 6px;
   cursor: pointer;
-  transition: transform 0.3s ease, background-color 0.3s ease;
-  z-index: 200;
-  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.15);
+  font-size: 13px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  transition: background-color 0.2s;
+  white-space: nowrap;
 }
 
-.saved-toggle-btn-external:hover {
+.btn-float-new {
   background-color: #6483d1;
-  box-shadow: -2px 0 12px #9eb0dc;
-  transform: scale(1.05);
+  color: white;
 }
+.btn-float-new:hover { background-color: #5a73b8; }
 
+.btn-float-toggle {
+  background-color: #f3f4f6;
+  color: #374151;
+  border: 1px solid #d1d5db;
+  min-width: 40px;
+}
+.btn-float-toggle:hover { background-color: #e5e7eb; }
+
+/* 사이드바 카드 아이템 */
 .saved-title {
-  margin-bottom: 14px;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
+  color: #374151;
+  margin-bottom: 15px;
 }
 
 .saved-empty {
-  color: #888;
+  color: #9ca3af;
   font-size: 14px;
-  margin-top: 20px;
+  text-align: center;
+  padding: 20px 0;
 }
 
-/* 개별 카드 */
 .saved-card {
   background: white;
-  border-radius: 10px;
-  padding: 14px 10px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
-  border: 2px solid #e5e7eb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 16px;
   margin-bottom: 12px;
   cursor: pointer;
-  transition: 0.15s;
+  transition: all 0.2s;
+}
+
+/* ✅ 선택된 상태 (Selected) */
+.saved-card.selected {
+  border-color: #6483d1;     /* 테두리색: 파란색 */
+  background-color: #eff6ff; /* 배경색: 연한 파란색 */
+  border-width: 2px;
+}
+
+/* 선택된 카드 하단 구분선 강조 */
+.saved-card.selected .saved-card-bottom {
+  border-top: 1px solid #6483d1;
 }
 
 .saved-card:hover {
-  background: #e8f0fe;
   border-color: #6483d1;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
 }
 
-/* 선택된 보고서 카드 */
 .saved-card.selected {
-  background-color: #e8f0fe; /* 선택된 카드 배경색 */
-  border-color: #6483d1;     /* 선택 강조 테두리 */
-
+  border-color: #6483d1;
+  background-color: #eff6ff;
+  border-width: 2px;
 }
 
-/* 카드 상단: 기관명 + 분석 질문 + 완료 버튼 */
 .saved-card-top {
   display: flex;
-  justify-content: space-between; /* 좌측 정보와 완료 버튼 분리 */
-  align-items: flex-start;        /* 기관명 기준으로 정렬 */
-}
-
-.saved-left {
-  display: flex;
-  flex-direction: column;         /* 기관명 + 분석 질문 세로 배치 */
-  gap: 2px;                       /* 줄 간격 */
-  flex: 1;                         /* 왼쪽 영역 넓이 확보 */
+  justify-content: space-between;
+  align-items: flex-start;
 }
 
 .saved-organization {
+  font-size: 14px;
   font-weight: 600;
-  font-size: 15px;
-  color: #111;
+  color: #1f2937;
+  margin-bottom: 4px;
 }
 
+/* 질문 텍스트 */
 .saved-topic {
   font-size: 13px;
-  color: #666;
+  color: #444;
   word-break: break-word;
+  line-height: 1.4;
+  margin-bottom: 2px;
+}
+
+/* 분석 기간 텍스트 */
+.saved-period-text {
+  font-size: 12px;
+  color: #888;
+  font-weight: 500;
+  letter-spacing: -0.3px;
+  margin-top: 2px;
 }
 
 .saved-status {
   background: #e6fbe6;
   color: #2bad52;
-  padding: 2px 8px;
+  width: 45px; 
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  
   border-radius: 6px;
   font-size: 12px;
   font-weight: 600;
-  white-space: nowrap; /* 버튼 텍스트 줄바꿈 방지 */
+  white-space: nowrap;
 }
 
-/* 카드 하단: 날짜 및 태그 */
 .saved-card-bottom {
   display: flex;
   justify-content: space-between;
@@ -692,7 +457,6 @@
   gap: 8px;
 }
 
-/* 선택된 카드의 내부 구분선 색상 변경 */
 .saved-card.selected .saved-card-bottom {
   border-top: 1px solid #6483d1;
 }
@@ -700,160 +464,702 @@
 .saved-date {
   font-size: 13px;
   color: #666;
-  flex-shrink: 0;          /* 줄어들지 않도록 고정 */
-  width: 90px;              /* 날짜 영역 고정 폭, 필요에 맞게 조정 */
-  text-align: left;         /* 왼쪽 정렬 */
+  flex-shrink: 0;
+  width: 90px;
+  text-align: left;
 }
 
 .saved-tag-actions {
   display: flex;
   align-items: center;
-  gap: 8px; 
-  flex: 1;                  /* 남은 공간 채우기 */
+  gap: 8px;
+  flex: 1;
   justify-content: flex-end;
 }
 
+/* 태그 및 버튼 높이 통일 */
 .saved-tag {
-  background-color: #f0f0f0;
-  color: #555;
-  padding: 2px 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 25px;
+  padding: 0 10px;
   border-radius: 4px;
   font-size: 0.85rem;
-  white-space: nowrap;      /* 한 줄 고정 */
+  font-weight: 600;
+  white-space: nowrap;
+  box-sizing: border-box;
 }
 
-/* 삭제 버튼 추가 */
+/* 사용자용 태그 */
+.saved-tag.user {
+  background-color: #f5f5f5; 
+  color: #424242; 
+  border: 1px solid #bdbdbd;
+}
+
+/* 운영자용 태그 */
+.saved-tag.operator {
+  background-color: #fff3e0;
+  color: #f57c00;
+  border: 1px solid #ffe0b2;
+}
+
 .saved-delete-btn {
-  background: #ffdede;  
+  background: #ffdede;
   border: none;
-  color: #d32f2f;     
-  padding: 2px 8px;     
-  font-size: 12px;     
-  border-radius: 6px; 
-  cursor: pointer;
-  margin-left: 6px;    
-  transition: 0.2s;
-}
-
-.saved-delete-btn:hover {
-  color: white;         
-  background-color: #d32f2f;  
-  font-weight: 600;     
-}
-
-.download-btn {
+  color: #d32f2f;
+  width: 45px;
+  height: 26px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #cceeff; 
-  color: #007bff;          
-  border: none;
+  padding: 0; 
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  margin-left: 6px;
+  transition: background-color 0.2s;
+}
+
+.saved-delete-btn:hover {
+  color: white;
+  background-color: #d32f2f;
+}
+
+/* 사이드바 확장 버튼 */
+.btn-expand-toggle {
   padding: 4px 8px;
+  background-color: transparent;
+  border: 1px solid #d1d5db;
   border-radius: 4px;
   cursor: pointer;
-  font-size: 0.85rem;
-  transition: all 0.2s ease;
+  font-size: 12px;
+  color: #6b7280;
 }
 
-.download-btn:hover {
-  background-color: #007bff; 
-  color: white;
+/* --- 결과 및 보고서 영역 --- */
+.error-message {
+  background-color: #fee2e2;
+  color: #991b1b;
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  font-size: 14px;
+}
+
+.result-card {
+  background: white;
+  padding: 40px;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e7eb;
+}
+
+.result-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1f2937;
+  margin-bottom: 20px;
+  padding-bottom: 20px;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.info-summary {
+  background-color: #f9fafb;
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 30px;
+  font-size: 15px;
+  color: #374151;
+}
+
+.chart-section,
+.rating-chart-section {
+  margin-bottom: 30px;
+  padding: 20px;
+  background-color: #f9fafb;
+  border-radius: 8px;
+}
+
+.section-title {
+  margin-bottom: 20px;
+  font-size: 20px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.chart-date-group {
+  margin-bottom: 40px;
+  padding-bottom: 30px;
+  border-bottom: 2px solid #e5e7eb;
+}
+.chart-date-group:last-child {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+.chart-date-title {
+  margin-bottom: 15px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.empty-data {
+  padding: 20px;
+  text-align: center;
+  color: #6b7280;
+}
+
+/* 참고 출처 */
+.sources-section {
+  margin-bottom: 30px;
+  padding: 20px;
+  background-color: #fffbeb;
+  border-radius: 8px;
+  border: 1px solid #fcd34d;
+}
+
+.sources-title {
+  display: block;
+  font-weight: 600;
+  color: #92400e;
+  margin-bottom: 10px;
+}
+
+.sources-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.sources-list li {
+  margin-bottom: 6px;
+}
+
+.source-link {
+  color: #b45309;
+  text-decoration: none;
+  font-size: 14px;
+}
+.source-link:hover { text-decoration: underline; }
+
+.more-sources {
+  font-size: 13px;
+  color: #92400e;
+  margin-top: 8px;
+  font-weight: 500;
+}
+
+/* 분석 요약 */
+.analysis-summary {
+  margin-bottom: 30px;
+  padding: 25px;
+  background-color: #eff6ff;
+  border-radius: 8px;
+  border-left: 4px solid #6483d1;
+}
+
+.analysis-title {
+  display: block;
+  font-size: 18px;
+  font-weight: 700;
+  color: #1e40af;
+  margin-bottom: 15px;
+}
+
+.analysis-content {
+  line-height: 1.6;
+  color: #374151;
+}
+
+/* --- 최종 보고서 (개선된 UI) --- */
+.final-report-section {
+  margin-top: 50px;
+  padding: 40px;
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.03), 0 4px 6px -2px rgba(0, 0, 0, 0.02); /* 부드러운 그림자 */
+  position: relative;
+}
+
+/* 상단 장식용 바 */
+.final-report-section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 6px;
+  background: linear-gradient(90deg, #6483d1, #a3b8ef);
+  border-radius: 12px 12px 0 0;
+}
+
+.final-report-title {
+  display: block;
+  font-size: 22px;
+  font-weight: 800;
+  color: #1f2937;
+  margin-bottom: 30px;
+  padding-bottom: 15px;
+  border-bottom: 2px solid #f1f5f9;
+  letter-spacing: -0.5px;
+}
+
+.final-report-content {
+  font-size: 16px;
+  line-height: 1.8; /* 가독성을 위한 줄간격 확보 */
+  color: #334155;
+  word-break: keep-all; /* 한글 단어 단위 줄바꿈 */
+}
+
+/* 보고서 내부 제목 스타일링 */
+.final-report-content h1 {
+  font-size: 20px;
+  font-weight: 700;
+  color: #111827;
+  margin-top: 32px;
+  margin-bottom: 16px;
+  padding-left: 12px;
+  border-left: 4px solid #6483d1; /* 좌측 포인트 컬러 */
+}
+
+.final-report-content h2 {
+  font-size: 18px;
+  font-weight: 700;
+  color: #374151;
+  margin-top: 24px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+}
+
+.final-report-content h3 {
+  font-size: 17px;
+  font-weight: 600;
+  color: #4b5563;
+  margin-top: 20px;
+  margin-bottom: 10px;
+}
+
+/* 본문 문단 */
+.final-report-content p {
+  margin-bottom: 16px;
+  text-align: justify; /* 양쪽 정렬로 깔끔하게 */
+}
+
+/* 강조 텍스트 (형광펜 효과) */
+.final-report-content strong {
+  color: #6483d1; 
+  font-weight: 700;
+  background: linear-gradient(180deg, rgba(255,255,255,0) 60%, #dbeafe 60%); 
+  white-space: nowrap;   /* 글자가 좁아도 절대 줄바꿈 하지 않음 */
+  flex-shrink: 0;        /* 공간이 부족해도 찌그러지지 않음 */
+}
+
+/* 리스트 스타일 (순서 없는 목록) */
+.final-report-content ul {
+  padding-left: 20px;
+  margin-bottom: 20px;
+  list-style: none; /* 기본 불릿 제거 후 커스텀 */
+}
+
+.final-report-content ul li {
+  display: flex;             /* 점과 글자를 나란히 배치 */
+  align-items: flex-start;   /* 점을 글자의 첫 줄 높이에 맞춤 */
+  gap: 8px;                  /* 점과 글자 사이 간격 */
+  margin-bottom: 8px;
+  position: relative;        /* 혹시 모를 충돌 방지 */
+}
+
+.final-report-content ul li::before {
+  content: '•';
+  color: #6483d1;
   font-weight: bold;
+  font-size: 1.2em;
+  line-height: 1.5;      /* 글자 높이와 비슷하게 맞춤 */
+  flex-shrink: 0;        /* 글자가 많아져도 점이 찌그러지지 않게 고정 */
+  margin-top: -1px;      /* 점의 높이 미세 조정 */
 }
 
+/* 리스트 스타일 (순서 있는 목록) */
+.final-report-content ol {
+  padding-left: 20px;
+  margin-bottom: 20px;
+}
+
+.final-report-content ol li {
+  margin-bottom: 8px;
+  padding-left: 5px;
+}
+
+/* 인용구/요약 박스 스타일 */
+.final-report-content blockquote {
+  background-color: #f8fafc;
+  border-left: 4px solid #cbd5e1;
+  margin: 20px 0;
+  padding: 16px 20px;
+  font-style: italic;
+  color: #555;
+  border-radius: 0 8px 8px 0;
+}
+
+/* 코드 블록이 있을 경우 */
+.final-report-content pre {
+  background-color: #1e293b;
+  color: #e2e8f0;
+  padding: 15px;
+  border-radius: 8px;
+  overflow-x: auto;
+  font-family: 'Fira Code', monospace;
+  font-size: 14px;
+  margin: 20px 0;
+}
+
+/* 구분선 */
+.final-report-content hr {
+  border: 0;
+  height: 1px;
+  background: #e2e8f0;
+  margin: 30px 0;
+}
+
+/* 다운로드 버튼 및 생성 정보 */
 .download-btn-wrapper {
   margin-top: 20px;
   margin-bottom: 20px;
   display: flex;
-  justify-content: center;
+  justify-content: flex-start;
 }
 
-.download-btn-wrapper .download-btn {
-  padding: 10px 20px;
-  font-size: 16px;
+/* 다운로드 버튼 스타일 */
+.download-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 25px;           
+  padding: 0 16px;
+  border-radius: 6px;     
+  background-color: #eff2fe; /* 보라색 계열 연한 배경 */
+  color: #6483d1;            /* 보라색 계열 글씨 */
+  border: 1px solid #eff2fe;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
   gap: 8px;
 }
 
-
-.saved-toggle-btn:hover {
-  background-color: #6483d1;
-  box-shadow: 0 4px 12px #9eb0dc;
-  transform: scale(1.05);
+/* 마우스 올렸을 때 (Hover) */
+.download-btn:hover {
+  background-color: #6483d1; 
+  color: white;              
+  border-color: #6483d1;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(100, 131, 209, 0.2);
 }
 
-.saved-content {
-  padding: 20px 20px 20px;
+.generated-at {
+  text-align: right;
+  font-size: 13px;
+  color: #9ca3af;
+  margin-top: 10px;
 }
 
-.saved-title {
-  margin-bottom: 14px;
-  font-size: 18px;
-  font-weight: 600;
-}
+/* =========================================
+   추가 질문 폼 & 하위 보고서 (타임라인 스타일)
+   ========================================= */
 
-.saved-list-sidebar.closed + .saved-toggle-btn {
-  right: 0; /* 사이드바 접히면 버튼 화면 끝으로 이동 */
-  transform: rotate(180deg);
-}
-
-/* 3단계 진행 표시 */
-.stepper {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 30px;
-  max-width: 600px;
-  margin-left: auto;
-  margin-right: auto;
-}
-
-.step {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  flex: 1;
+/* --- 1. 추가 질문 폼 (입력 영역) --- */
+.question-form-container {
+  margin-top: 40px;
+  padding: 25px;
+  background-color: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03); /* 부드러운 그림자 */
   position: relative;
 }
 
-.step:not(:last-child)::after {
-  content: '';
-  position: absolute;
-  top: 12px; /* 원 중앙 기준 */
-  left: 50%;
-  width: 100%;
-  height: 2px;
-  background-color: #eee;
-  z-index: 0;
-}
-
-.step.active:not(:last-child)::after {
-  background-color: #6483d1; /* 활성 색상 */
-}
-
-.circle {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background-color: #eee;
+/* 폼 헤더 */
+.question-form-header {
+  margin-bottom: 20px;
   display: flex;
   align-items: center;
-  justify-content: center;
-  z-index: 1;
-  color: #fff;
-  font-weight: bold;
+  gap: 10px;
+  font-size: 17px;
+  font-weight: 700;
+  color: #1f2937;
+  padding-bottom: 15px;
+  border-bottom: 2px solid #f3f4f6;
 }
 
-.step.active .circle {
-  background-color: #6483d1;
+/* 정보 박스 (날짜 표시 등) */
+.info-box {
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
-.label {
-  margin-top: 6px;
+.info-label {
   font-size: 14px;
-  color: #666;
+  color: #6b7280;
+  font-weight: 600;
+  min-width: 80px; /* 라벨 정렬 */
 }
 
-.step.active .label {
+/* 날짜 태그 스타일 (입력창 대신 배지 느낌) */
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.date-tag {
+  padding: 6px 12px;
+  border-radius: 20px; /* 둥근 캡슐 모양 */
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.date-tag.gray {
+  background-color: #f3f4f6;
+  color: #4b5563;
+  border: 1px solid #e5e7eb;
+}
+
+.date-tag.blue {
+  background-color: #eff6ff;
   color: #6483d1;
+  border: 1px solid #bfdbfe;
 }
 
+/* 날짜 입력 그룹 */
+.date-input-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.date-input {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid #d1d5db;
+  font-size: 13px;
+  background-color: #fff;
+}
+
+/* [추가/수정] 날짜 추가 버튼 스타일 */
+.btn-small {
+  padding: 6px 14px;         /* 크기 */
+  border: none;
+  border-radius: 6px;        /* 둥근 모서리 */
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: white;
+  background-color: #6483d1; /* 메인 테마색 */
+  transition: background-color 0.2s;
+  white-space: nowrap;       /* 글자 줄바꿈 방지 */
+}
+
+/* 마우스 올렸을 때 */
+.btn-small:hover {
+  background-color: #4b6cb7; /* 좀 더 진한 색 */
+}
+
+/* 비활성화 상태 - 분석 대상 날짜 태그와 스타일 통일 */
+.btn-small:disabled {
+  background-color: #f3f4f6; /* 태그와 동일한 연한 회색 배경 */
+  border: 1px solid #e5e7eb; /* 태그와 동일한 테두리 */
+  color: #9ca3af;            /* 글자색은 연하게 */
+  cursor: not-allowed;
+}
+
+/* 삭제(X) 버튼 스타일 개선 */
+.btn-remove-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  
+  width: 16px;           
+  height: 16px;
+  padding: 0;
+  margin-left: 8px;      
+  
+  line-height: 1;        
+  margin-top: -1px;      
+
+  background-color: transparent;         
+  border: 1px solid rgba(100, 131, 209, 0.6); 
+  border-radius: 50%;                    
+  color: #6483d1;                        
+  font-size: 13px;                       
+  font-weight: bold;
+  
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-remove-tag:hover {
+  background-color: #6483d1; 
+  border-color: #6483d1;     
+  color: white;              
+}
+
+/* 수정된 질문 입력창 */
+.question-textarea {
+  width: 100%;
+  min-height: 100px;       /* 최소 높이 */
+  padding: 12px;           /* 여백 통일 */
+  
+  border: 2px solid #ddd;  
+  border-radius: 4px;
+  background-color: #f7f7f7;
+  font-size: 16px;         /* 글자 크기 키움 */
+  font-family: 'Noto Sans KR', sans-serif;
+  
+  resize: vertical;        /* 세로로만 늘리기 가능 */
+  outline: none;
+  margin-bottom: 10px;
+  box-sizing: border-box;
+  transition: background-color 0.2s, border-color 0.2s;
+}
+
+.question-textarea:focus {
+  border-color: #6483d1;   /* 테마색 테두리 */
+  background-color: #ffffff; /* 배경 하얗게 */
+}
+
+/* --- 2. 하위 보고서 리스트 (타임라인 연결) --- */
+.child-reports-wrapper {
+  margin-top: 30px;
+  padding-left: 20px; /* 들여쓰기 */
+  position: relative;
+}
+
+/* 타임라인 연결선 */
+.child-reports-wrapper::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 2px;
+  background-color: #e5e7eb; /* 회색 연결선 */
+}
+
+/* 접기/펼치기 버튼 */
+.btn-toggle-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 20px;
+  padding: 6px 12px;
+  background-color: #f3f4f6;
+  border: none;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #4b5563;
+  font-weight: 500;
+  transition: background 0.2s;
+  position: relative;
+  z-index: 1; /* 선보다 위에 */
+}
+
+.btn-toggle-child:hover {
+  background-color: #e5e7eb;
+}
+
+/* 개별 하위 보고서 아이템 */
+.child-report-item {
+  position: relative;
+  margin-bottom: 25px;
+  padding-left: 25px; /* 선과 카드 사이 간격 */
+}
+
+/* 타임라인 점 (Dot) */
+.child-report-item::before {
+  content: '';
+  position: absolute;
+  left: -26px; /* 선 위치에 맞춤 */
+  top: 18px;
+  width: 10px;
+  height: 10px;
+  background-color: #ffffff;
+  border: 2px solid #6483d1; /* 파란 테두리 점 */
+  border-radius: 50%;
+  z-index: 2;
+}
+
+/* 하위 보고서 카드 */
+.child-report-card {
+  background-color: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 20px;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.child-report-card:hover {
+  border-color: #6483d1;
+  box-shadow: 0 4px 12px rgba(100, 131, 209, 0.15);
+  transform: translateY(-2px);
+}
+
+/* 하위 보고서 헤더 (양쪽 정렬) */
+.child-report-header {
+  display: flex;
+  justify-content: space-between; /* 좌측 텍스트와 우측 삭제 버튼 분리 */
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #f3f4f6; /* 구분선 살짝 추가 */
+}
+
+.child-report-link {
+  color: #1f2937;
+}
+
+/* 하위 보고서 제목 (한 줄로) */
+.child-report-link strong {
+  font-size: 15px;      
+  display: inline;       
+  margin-right: 6px;     
+  color: #374151;       
+}
+
+.child-report-date {
+  font-size: 12px;
+  color: #9ca3af;
+  display: flex;
+  align-items: center;
+}
+
+/* [추가] 하위 보고서 삭제 버튼 */
+.btn-delete-child {
+  background-color: transparent;
+  border: 1px solid #fee2e2;
+  color: #ef4444; /* 빨간색 텍스트 */
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-delete-child:hover {
+  background-color: #fee2e2;
+  color: #b91c1c;
+}
