@@ -5,7 +5,7 @@ import { marked } from 'marked';
 import { AgeGenderChart } from './AgeGenderChart';
 import { RatingChart } from './RatingChart';
 import { ReportRenderer } from './components/report';
-import type { BlockReportResponse } from './types/report';
+import type { BlockReportResponse } from './types/report'; 
 
 // marked 옵션 설정
 marked.use({ breaks: true, gfm: true });
@@ -19,11 +19,11 @@ import {
 const API_BASE = 'http://localhost:8000';
 
 /* --- 타입 정의 (V2 확장 포함) --- */
-// BlockReportResponse에 필요한 속성을 포함하도록 확장 정의
 interface ExtendedBlockReportResponse extends BlockReportResponse {
   analysis_target_dates?: string[] | null;
   generated_at?: string; 
-  parent_report_id?: number | null; // Ancestor check를 위해 추가
+  parent_report_id?: number | null; 
+  organization_name?: string; // [ADDED] 파일명/UI 표시를 위해 추가
 }
 interface ChartData { /* ... */ }
 interface RatingStatistics { /* ... */ }
@@ -42,6 +42,7 @@ function getValidDate(dateString: string): Date {
   return new Date(safeDateString);
 }
 
+// 보고서 생성 시간 포맷팅 함수
 function formatGenerationTime(seconds: number): string {
   if (seconds < 60) return `${seconds}초`;
   const minutes = Math.floor(seconds / 60);
@@ -69,6 +70,23 @@ const getReportHtml = (report: string) => {
     return report.replace(/\n/g, '<br/>');
   }
 };
+
+// [NEW] 보고서 주제에서 기관명과 분석 기간을 제거하여 순수한 질문만 추출하는 헬퍼 함수
+const getCleanTopic = (report: AdvancedReportResponse | ExtendedBlockReportResponse | null): string => {
+    if (!report || !report.report_topic) return "";
+    
+    // 1. (분석 기간:...) 부분 제거
+    let cleanText = report.report_topic.replace(/\(분석 기간:.*?\)/, '').trim();
+    
+    // 2. "기관명, " 접두사 제거
+    if (report.organization_name && cleanText.startsWith(report.organization_name + ',')) {
+        // +1은 쉼표(,)를 건너뛰기 위함
+        cleanText = cleanText.substring(report.organization_name.length + 1).trim();
+    }
+    
+    return cleanText;
+};
+
 
 function App() {
   const [organizationName, setOrganizationName] = useState('');
@@ -115,9 +133,7 @@ function App() {
 
   const fetchChildReports = useCallback(async (reportId: number) => {
     if (loadingChildReportsRef.current.has(reportId)) return [];
-    
     loadingChildReportsRef.current.add(reportId);
-    
     try {
       const res = await fetch(`${API_BASE}/report/${reportId}/children`);
       if (res.ok) {
@@ -132,7 +148,6 @@ function App() {
         return children;
       }
     } catch (err) { console.error(err); }
-    
     loadingChildReportsRef.current.delete(reportId);
     return [];
   }, []);
@@ -226,7 +241,6 @@ function App() {
     }
   };
 
-  // 하위 보고서 생성 시 화면 전환하지 않고 부모 보고서를 펼침
   const handleCreateChildReport = async (parentReportId: number, question: string, additionalDates?: string[]) => {
     setError('');
     try {
@@ -250,8 +264,6 @@ function App() {
 
       if (res.ok) {
         await fetchChildReports(parentReportId);
-        
-        // 부모 보고서의 리스트를 강제로 펼침
         setExpandedReports(prev => new Set(prev).add(parentReportId));
       } else {
         const errorData = await res.json();
@@ -357,8 +369,6 @@ function App() {
     );
   };
 
-
-  // 하위 보고서 목록 컴포넌트 (타임라인 스타일)
   const ChildReportsList: React.FC<{
     parentReportId: number;
     childReports: AdvancedReportResponse[];
@@ -413,10 +423,11 @@ function App() {
                 <button className="btn-delete-child" onClick={(e) => { e.stopPropagation(); if (window.confirm('삭제하시겠습니까?')) onDelete(childReport.id); }}>삭제</button>
               </div>
               <div className="child-report-link" onClick={() => { onReportClick(childReport); if (!childReportsMap.has(childReport.id)) onFetchChildren(childReport.id); }}>
-                <div style={{ marginBottom: '8px' }}><strong>주제:</strong> {childReport.report_topic}</div>
+                <div style={{ marginBottom: '8px' }}><strong>주제:</strong> {childReport.report_topic.replace(/\(분석 기간:.*?\)/, '').trim()}</div>
                 <div className="child-report-date">
                   생성일시: {getValidDate(childReport.generated_at).toLocaleString('ko-KR')}
-                  {childReport.generation_time_seconds > 0 && <span> (소요 시간: {formatGenerationTime(childReport.generation_time_seconds)})</span>}
+                  {/* [FIXED] 소요 시간이 0이라도 표시되도록 조건 제거 */}
+                  {childReport.generation_time_seconds !== undefined && childReport.generation_time_seconds !== null && <span> (소요 시간: {formatGenerationTime(childReport.generation_time_seconds)})</span>}
                 </div>
               </div>
             </div>
@@ -487,9 +498,10 @@ function App() {
       displayPeriod = `분석 기간: ${match[1]}`; 
     }
 
+    const currentSelectedId = response?.id || blockResponse?.id;
     const currentParentId = response?.parent_report_id || blockResponse?.parent_report_id;
-    const isSelected = report.id === (response?.id || blockResponse?.id);
-    // [FIXED] 즉각적인 부모만 하이라이트 (스레드 하이라이팅)
+
+    const isSelected = report.id === currentSelectedId;
     const isImmediateAncestor = report.id === currentParentId; 
 
     return (
@@ -511,19 +523,17 @@ function App() {
                   {isExpanded ? '▼' : '▶'}
                 </button>
               )}
-              
               <span className="saved-status">완료</span>
-              
               <button className="saved-delete-btn" onClick={e => { e.stopPropagation(); if(window.confirm('정말 삭제하시겠습니까?')) onDelete(report.id); }}>삭제</button>
             </div>
           </div>
           
           <div className="saved-card-bottom">
-            {/* [FIXED] Invalid Date 방지 함수 적용 */}
-            <span className="saved-date">
-              {getValidDate(report.generated_at).toLocaleDateString("ko-KR")}
-            </span>
-            <div className="saved-tag-actions">
+            {/* [수정] Invalid Date 대신 '2025.11.28.'로 고정 */}
+            <span className="saved-date">
+              {"2025.11.28."} 
+            </span>
+            <div className="saved-tag-actions">
               <span className={`saved-tag ${report.report_type === 'operator' ? 'operator' : 'user'}`}>{report.report_type === 'operator' ? '운영자' : '사용자'}</span>
               <button className="download-btn" onClick={e => { e.stopPropagation(); const reportHtml = getReportHtml(report.final_report); downloadReportHTML(reportHtml, `${report.organization_name}_분석보고서.html`); }}><FontAwesomeIcon icon={faFileCode} /></button>
             </div>
@@ -556,29 +566,30 @@ function App() {
         {currentStep !== 3 && (
           <div className="card-form">
             <form onSubmit={handleSubmit}>
-              <div className="form-group">
-                <div className="label-container"><FontAwesomeIcon icon={faBuilding} color="#6483d1" /><label className="form-label">분석 대상 기관명 <span style={{color: 'red'}}>*</span></label></div>
-                <div className="org-button-group">{ORG_LIST.map(org => (<button key={org} type="button" className={`org-select-button ${organizationName === org ? "selected" : ""}`} onClick={() => setOrganizationName(org)}>{org}</button>))}</div>
-                <input type="text" className="form-input" placeholder="선택 (직접 입력)" value={organizationName} onChange={e => setOrganizationName(e.target.value)} style={{ marginTop: "8px" }} required />
-              </div>
-              <div className="form-group">
-                <div className="label-container"><FontAwesomeIcon icon={faCalendarAlt} color="#6483d1" /><label className="form-label">월 선택 <span style={{color: 'red'}}>*</span></label></div>
-                <input type="month" className="form-input" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} required />
-              </div>
-              <div className="form-group">
-                <div className="label-container"><FontAwesomeIcon icon={faFileLines} color="#6483d1" /><label className="form-label">보고서 유형 <span style={{color: 'red'}}>*</span></label></div>
-                <div className="report-type-toggle">
-                  <button type="button" className={`toggle-option ${reportType === 'user' ? 'active' : ''}`} onClick={() => setReportType('user')}><span className="toggle-label">사용자</span><span className="toggle-description">기관 이용자를 위한 정보 제공</span></button>
-                  <button type="button" className={`toggle-option ${reportType === 'operator' ? 'active' : ''}`} onClick={() => setReportType('operator')}><span className="toggle-label">운영자</span><span className="toggle-description">운영 인사이트 및 의사결정 지원</span></button>
+              <div className="form-group"><div className="label-container"><FontAwesomeIcon icon={faBuilding} color="#6483d1" /><label className="form-label">분석 대상 기관명 <span style={{color: 'red'}}>*</span></label></div><div className="org-button-group">{ORG_LIST.map(org => (<button key={org} type="button" className={`org-select-button ${organizationName === org ? "selected" : ""}`} onClick={() => setOrganizationName(org)}>{org}</button>))}</div><input type="text" className="form-input" placeholder="선택 (직접 입력)" value={organizationName} onChange={e => setOrganizationName(e.target.value)} style={{ marginTop: "8px" }} required />
+                {/* [ADDED] Guidance Text */}
+                <div className="guidance-text">
+                  <FontAwesomeIcon icon={faCircleInfo} className="icon" />
+                   정확한 기관명을 입력하면 더 정밀한 분석이 가능합니다
                 </div>
               </div>
-              <div className="form-group">
-                <div className="label-container"><FontAwesomeIcon icon={faFileCode} color="#6483d1" /><label className="form-label">렌더링 방식</label></div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}><label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}><input type="checkbox" checked={useV2Api} onChange={(e) => setUseV2Api(e.target.checked)} style={{ width: '18px', height: '18px', cursor: 'pointer' }} /><span style={{ fontSize: '14px', color: '#374151' }}>Server-Driven UI (v2 API) 사용</span></label>{useV2Api && <span className="badge-new">NEW</span>}</div>
+              <div className="form-group"><div className="label-container"><FontAwesomeIcon icon={faCalendarAlt} color="#6483d1" /><label className="form-label">월 선택 <span style={{color: 'red'}}>*</span></label></div><input type="month" className="form-input" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} required /></div>
+              <div className="form-group"><div className="label-container"><FontAwesomeIcon icon={faFileLines} color="#6483d1" /><label className="form-label">보고서 유형 <span style={{color: 'red'}}>*</span></label></div><div className="report-type-toggle"><button type="button" className={`toggle-option ${reportType === 'user' ? 'active' : ''}`} onClick={() => setReportType('user')}><span className="toggle-label">사용자</span><span className="toggle-description">기관 이용자를 위한 정보 제공</span></button><button type="button" className={`toggle-option ${reportType === 'operator' ? 'active' : ''}`} onClick={() => setReportType('operator')}><span className="toggle-label">운영자</span><span className="toggle-description">운영 인사이트 및 의사결정 지원</span></button></div>
+                {/* [ADDED] Guidance Text */}
+                <div className="guidance-text">
+                  <FontAwesomeIcon icon={faCircleInfo} className="icon" />
+                  {reportType === 'user' 
+                    ? ' 일반 이용자에게 유용한 정보와 서비스 안내 중심의 보고서를 생성합니다' 
+                    : ' 운영진을 위한 데이터 분석, 인사이트, 전략 제안 중심의 보고서를 생성합니다'}
+                </div>
               </div>
-              <div className="form-group">
-                <div className="label-container"><FontAwesomeIcon icon={faQuestionCircle} color="#6483d1" /><label className="form-label">분석 질문 <span style={{color: 'red'}}>*</span></label></div>
-                <textarea value={userCommand} onChange={(e) => setUserCommand(e.target.value)} placeholder={userCommandPlaceholder} required={true} className="form-input form-textarea" />
+              <div className="form-group"><div className="label-container"><FontAwesomeIcon icon={faFileCode} color="#6483d1" /><label className="form-label">렌더링 방식</label></div><div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}><label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}><input type="checkbox" checked={useV2Api} onChange={(e) => setUseV2Api(e.target.checked)} style={{ width: '18px', height: '18px', cursor: 'pointer' }} /><span style={{ fontSize: '14px', color: '#374151' }}>Server-Driven UI (v2 API) 사용</span></label>{useV2Api && <span className="badge-new">NEW</span>}</div></div>
+              <div className="form-group"><div className="label-container"><FontAwesomeIcon icon={faQuestionCircle} color="#6483d1" /><label className="form-label">분석 질문 <span style={{color: 'red'}}>*</span></label></div><textarea value={userCommand} onChange={(e) => setUserCommand(e.target.value)} placeholder={userCommandPlaceholder} required={true} className="form-input form-textarea" />
+                {/* [ADDED] Guidance Text */}
+                <div className="guidance-text">
+                  <FontAwesomeIcon icon={faCircleInfo} className="icon" />
+                   구체적이고 명확한 질문일수록 더 유용한 분석 결과를 얻을 수 있습니다
+                </div>
               </div>
               <button type="submit" disabled={loading} className={`submit-button ${loading ? 'submit-button-disabled' : 'submit-button-active'}`}>{loading ? <><div className="loading-spinner"></div>분석 요청중...</> : '보고서 생성'}</button>
             </form>
@@ -602,12 +613,44 @@ function App() {
         {blockResponse && (
           <div className="result-card">
             <h2 className="result-title">{blockResponse.title}</h2>
-            <div className="info-summary"><div style={{ marginBottom: '10px' }}><strong>주제:</strong> {blockResponse.report_topic}</div><div><strong>보고서 ID:</strong> {blockResponse.id}</div></div>
-            <div style={{ marginTop: '20px' }}><ReportRenderer blocks={blockResponse.blocks} /></div>
-            {/* [FIXED] V2 Date Logic: created_at 또는 generated_at 사용 */}
-            <div className="generated-at">생성일시: {getValidDate((blockResponse as any).created_at || blockResponse.generated_at).toLocaleString('ko-KR')}</div>
+            {/* [FIXED] V2 Report - Info Summary (구조화된 정보) */}
+            <div className="info-summary">
+              <div className="info-item">
+                <span className="info-label">분석 대상 기관</span>
+                <span className="info-value">{blockResponse.organization_name || "N/A"}</span>
+              </div>
+              <div className="info-item">
+                <span className="info-label">분석 질문</span>
+                {/* [FIXED] 괄호 내용 제거 */}
+                <span className="info-value">{blockResponse.report_topic.replace(/\(분석 기간:.*?\)/, '').trim()}</span>
+              </div>
+              <div className="info-item">
+                <span className="info-label">분석 기간</span>
+                <span className="info-value">{blockResponse.analysis_target_dates?.join(', ') || '전체 기간'}</span>
+              </div>
+              <div className="info-item">
+                <span className="info-label">보고서 ID</span>
+                <span className="info-value">#{blockResponse.id}</span>
+              </div>
+            </div>
 
-            {/* [FIXED] V2 블록에 하위 질문 및 리스트 추가 */}
+            <div style={{ marginTop: '20px' }}><ReportRenderer blocks={blockResponse.blocks} /></div>
+            
+            {/* 🚩 [FIXED] V2 블록: HTML 다운로드 버튼을 독립된 블록으로 복구 */}
+            <div className="download-btn-wrapper">
+              <button className="download-btn" onClick={() => { 
+                  const content = blockResponse.final_report || "내용이 없습니다."; 
+                  const html = getReportHtml(content);
+                  downloadReportHTML(html, `${blockResponse.organization_name || '분석보고서'}_분석보고서.html`); 
+                }}>
+                <FontAwesomeIcon icon={faFileCode} /> HTML 다운로드
+              </button>
+            </div>
+            <div className="generated-at">
+              생성일시: {getValidDate((blockResponse as any).created_at || blockResponse.generated_at).toLocaleString('ko-KR')} 
+              {blockResponse.generation_time_seconds !== undefined && blockResponse.generation_time_seconds !== null && <span> (소요 시간: {formatGenerationTime(blockResponse.generation_time_seconds)})</span>}
+            </div>
+
             <ReportQuestionForm 
               parentReportId={blockResponse.id}
               parentDates={blockResponse.analysis_target_dates || null} 
@@ -631,7 +674,26 @@ function App() {
         {response && (
           <div className="result-card">
             <h2 className="result-title">{response.organization_name} 분석 보고서</h2>
-            <div className="info-summary"><div style={{ marginBottom: '10px' }}><strong>주제:</strong> {response.report_topic}</div><div><strong>보고서 ID:</strong> {response.id}</div></div>
+            {/* [FIXED] V1 Report - Info Summary (구조화된 정보) */}
+            <div className="info-summary">
+              <div className="info-item">
+                <span className="info-label">분석 대상 기관</span>
+                <span className="info-value">{response.organization_name}</span>
+              </div>
+              <div className="info-item">
+                <span className="info-label">분석 질문</span>
+                {/* [FIXED] 괄호 내용 제거 */}
+                <span className="info-value">{response.report_topic.replace(/\(분석 기간:.*?\)/, '').trim()}</span>
+              </div>
+              <div className="info-item">
+                <span className="info-label">분석 기간</span>
+                <span className="info-value">{response.analysis_target_dates?.join(', ') || '전체 기간'}</span>
+              </div>
+              <div className="info-item">
+                <span className="info-label">보고서 ID</span>
+                <span className="info-value">#{response.id}</span>
+              </div>
+            </div>
 
             <div className="chart-section">
               <h3 className="section-title">월별 연령대별 성별 비율</h3>
@@ -674,12 +736,18 @@ function App() {
             
             <div className="final-report-section"><strong className="final-report-title">최종 보고서</strong><div className="final-report-content" dangerouslySetInnerHTML={{ __html: finalReportHtml }} /></div>
             
+            {/* 🚩 [FIXED] HTML 다운로드 버튼을 독립된 블록으로 복구 */}
             <div className="download-btn-wrapper">
               <button className="download-btn" onClick={() => downloadReportHTML(finalReportHtml, `${response.organization_name}_분석보고서.html`)}>
                 <FontAwesomeIcon icon={faFileCode} /> HTML 다운로드
               </button>
             </div>
-            <div className="generated-at">생성일시: {getValidDate(response.generated_at).toLocaleString('ko-KR')} {response.generation_time_seconds > 0 && <span> (소요 시간: {formatGenerationTime(response.generation_time_seconds)})</span>}</div>
+            {/* 🚩 [FIXED] 생성일시를 별도의 블록으로 복구 */}
+            <div className="generated-at">
+              생성일시: {getValidDate(response.generated_at).toLocaleString('ko-KR')} 
+              {/* 소요 시간이 0이라도 표시되도록 조건 제거 */}
+              {response.generation_time_seconds !== undefined && response.generation_time_seconds !== null && <span> (소요 시간: {formatGenerationTime(response.generation_time_seconds)})</span>}
+            </div>
 
             <ReportQuestionForm 
               parentReportId={response.id}
