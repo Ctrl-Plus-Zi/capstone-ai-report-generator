@@ -33,65 +33,61 @@ COMPOSE_SYSTEM_PROMPT = textwrap.dedent("""
     block_drafts(개별 블록 배열)를 받아서 적절한 레이아웃으로 배치합니다.
     row(가로 배치)를 활용하여 시각적으로 구조화된 보고서를 만듭니다.
 
-    ## 블록 유형
-    - markdown: 텍스트 콘텐츠 (제목, 설명, 분석)
-    - chart: 시각적 차트 (doughnut, bar, line, pie 등)
-    - table: 데이터 표
-    - image: 이미지 (포스터, 사진 등)
+    ## 블록 유형 및 속성
+    - **chart/table/image**: 데이터 블록 (id 속성 있음: "block_1", "block_2" 등)
+    - **markdown**: 텍스트 블록
+      - paired_with="block_X": 해당 블록의 짝 마크다운 (분석 텍스트)
+      - role="comprehensive": 총체적 분석 (section 속성으로 구분)
+        - section="overview": 개요 (보고서 맨 앞)
+        - section="key_findings": 주요 발견 사항
+        - section="detailed_analysis": 상세 분석
+        - section="implications": 시사점 및 제언 (보고서 맨 끝)
+      - 그 외: 독립적인 마크다운 (제목 등)
 
     ## 레이아웃 규칙
 
-    ### 필수 규칙
-    1. **짝 블록 연속 배치**: 차트와 그 설명 마크다운은 반드시 연속 배치
-       - 설명 마크다운은 보통 📊, 📈, 📉, 📋, 🔍 이모지로 시작
-       - row로 가로 배치: 차트 + 설명을 나란히
-       - 또는 그냥 연속 배치 (컨테이너 없이, 세로로 이어짐)
+    ### 필수 규칙 (중요!)
+    1. **보고서 구조**: 아래 순서로 배치
+       - overview (개요) → 맨 앞
+       - key_findings (주요 발견) → 데이터 블록 전
+       - 데이터 블록 + 짝 마크다운 → 본문
+       - detailed_analysis (상세 분석) → 데이터 블록 후
+       - implications (시사점) → 맨 끝
 
-    2. **비율 차트 그룹화**: 연속된 doughnut/pie 차트 2개는 row로 묶어서 비교
-    
-    3. **이미지 + 설명**: 이미지와 🖼️로 시작하는 설명은 row로 배치
-    
-    4. **테이블은 단독 배치**: table 블록은 절대 row에 포함하지 않음. 전체 너비를 사용해야 함.
-       - 테이블 다음에 오는 설명 마크다운도 단독 배치 (연속으로 세로 배치)
+    2. **paired_with 연결**: 마크다운의 paired_with가 블록의 id와 같으면 반드시 연속 배치
+       - 예: chart(id="block_1") 다음에 markdown(paired_with="block_1")
+       - row로 가로 배치하거나 그냥 연속 배치 (세로)
 
-    ### 권장 사항
-    - 섹션 제목(##, ###) 마크다운은 단독 배치
-    - **테이블(table)은 항상 단독 배치** (row로 묶지 않음, 전체 너비 사용)
-    - 도입부 → 핵심 시각화 → 상세 분석 순서 유지
+    3. **비율 차트 그룹화**: doughnut/pie 차트 2개 + 각각의 짝 마크다운을 row로 묶기
+    
+    4. **테이블은 단독 배치**: table 블록은 row에 포함하지 않음 (전체 너비 사용)
 
     ## 도구 사용법
     
     1. `create_row_layout`: 블록들을 가로로 배치
        - block_indices: 묶을 블록들의 인덱스 배열
-       - gap: 간격 (기본 "16px", 차트 비교는 "24px" 권장)
+       - gap: 간격 (기본 "16px")
     
     2. `finalize_report_layout`: 최종 레이아웃 확정 (마지막에 반드시 호출)
        - layout_sequence: 최종 배열 순서
-         - 숫자: 개별 블록 인덱스 (순서대로 배치)
-         - dict: row 컨테이너 {"type": "row", "indices": [...], "gap": "..."}
 
     ## 예시
 
-    block_drafts가 다음과 같을 때:
-    [0] markdown: "## 방문자 분석"
-    [1] chart (doughnut): "연령대별 방문자"
-    [2] markdown: "**📊 연령대 분석** 30대가 가장 많습니다"
-    [3] chart (doughnut): "성별 방문자"
-    [4] markdown: "**📊 성별 분석** 여성이 더 많습니다"
-    [5] table: "월별 방문자 현황"
-    [6] markdown: "**📋 현황 분석** 10월이 최고였습니다"
+    block_drafts:
+    [0] chart (id=block_1, doughnut): "연령대별 방문자"
+    [1] chart (id=block_2, doughnut): "성별 방문자"
+    [2] markdown (paired_with=block_1): "**분석 결과** 30대가..."
+    [3] markdown (paired_with=block_2): "**분석 결과** 여성이..."
+    [4] markdown (role=comprehensive, section=overview): "## 개요..."
+    [5] markdown (role=comprehensive, section=key_findings): "## 주요 발견..."
+    [6] markdown (role=comprehensive, section=implications): "## 시사점..."
 
     좋은 레이아웃:
-    - [0] 제목은 단독
-    - [1, 2, 3, 4]는 두 개의 doughnut + 각각의 설명을 row로
-    - [5, 6]은 테이블과 설명을 순서대로 (세로 배치)
-
-    finalize_report_layout 호출:
     layout_sequence = [
-        0,
-        {"type": "row", "indices": [1, 2, 3, 4], "gap": "24px"},
-        5,
-        6
+        4,  // 개요 (맨 앞)
+        5,  // 주요 발견
+        {"type": "row", "indices": [0, 2, 1, 3], "gap": "24px"},  // 차트들
+        6   // 시사점 (맨 끝)
     ]
 """).strip()
 
@@ -108,30 +104,47 @@ def _format_blocks_for_llm(block_drafts: List[dict]) -> str:
     lines = []
     for i, block in enumerate(block_drafts):
         block_type = block.get("type", "unknown")
+        block_id = block.get("id", "")
         
         if block_type == "markdown":
             content = block.get("content", "")
-            # 첫 50자만 표시
-            preview = content[:50].replace("\n", " ")
-            if len(content) > 50:
+            role = block.get("role", "")
+            section = block.get("section", "")
+            paired_with = block.get("paired_with", "")
+            
+            # 첫 40자만 표시
+            preview = content[:40].replace("\n", " ")
+            if len(content) > 40:
                 preview += "..."
-            lines.append(f"[{i}] markdown: \"{preview}\"")
+            
+            # role, section, paired_with 정보 추가
+            attrs = []
+            if role:
+                attrs.append(f"role={role}")
+            if section:
+                attrs.append(f"section={section}")
+            if paired_with:
+                attrs.append(f"paired_with={paired_with}")
+            attr_str = f" ({', '.join(attrs)})" if attrs else ""
+            
+            lines.append(f"[{i}] markdown{attr_str}: \"{preview}\"")
         
         elif block_type == "chart":
             chart_type = block.get("chartType", "unknown")
             title = block.get("title", "")
-            desc = block.get("description", "")[:30] if block.get("description") else ""
-            lines.append(f"[{i}] chart ({chart_type}): \"{title}\" - {desc}")
+            id_str = f", id={block_id}" if block_id else ""
+            lines.append(f"[{i}] chart ({chart_type}{id_str}): \"{title}\"")
         
         elif block_type == "table":
             title = block.get("title", "")
             row_count = len(block.get("rows", []))
-            lines.append(f"[{i}] table: \"{title}\" ({row_count}행)")
+            id_str = f", id={block_id}" if block_id else ""
+            lines.append(f"[{i}] table{id_str}: \"{title}\" ({row_count}행)")
         
         elif block_type == "image":
             alt = block.get("alt", "")
-            caption = block.get("caption", "")[:30] if block.get("caption") else ""
-            lines.append(f"[{i}] image: \"{alt}\" - {caption}")
+            id_str = f", id={block_id}" if block_id else ""
+            lines.append(f"[{i}] image{id_str}: \"{alt}\"")
         
         else:
             lines.append(f"[{i}] {block_type}: (unknown)")

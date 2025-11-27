@@ -103,22 +103,22 @@ def _get_calculated_stats(research_payload: List[dict]) -> tuple[dict, dict]:
 def _create_blocks_from_calculated_stats(
     calculated_stats: dict,
     block_configs: dict = None
-) -> tuple[List[dict], List[str]]:
+) -> List[dict]:
     """
-    사전 계산된 통계(calculated_stats)에서 직접 블록과 인사이트를 생성합니다.
+    사전 계산된 통계(calculated_stats)에서 직접 블록을 생성합니다.
     
     search_agent/query_executor에서 이미 계산된 통계이므로
     LLM 호출 없이 바로 블록으로 변환합니다.
+    인사이트는 블록의 description 속성에 포함됩니다.
     
     Args:
         calculated_stats: 계산된 통계 딕셔너리
         block_configs: 번들별 블록 설정 (query_bundles.json에서 로드)
     
     Returns:
-        (blocks, insights): 생성된 블록 목록과 인사이트 문자열 목록
+        생성된 블록 목록 (각 블록에 description으로 인사이트 포함)
     """
     blocks = []
-    insights = []
     block_configs = block_configs or {}
     
     # 리뷰 통계 → 평점 분포 차트
@@ -150,11 +150,6 @@ def _create_blocks_from_calculated_stats(
                 "data": {"labels": labels, "values": values},
                 "description": summary
             })
-            
-            # 인사이트 추출
-            if summary:
-                insights.append(f"**리뷰 분석**: {summary}")
-            
             logger.info(f"[ANALYSE_AGENT] 사전 계산 통계 → 리뷰 평점 차트 생성 (type={chart_type})")
     
     # 인구통계 → 연령대/성별 차트
@@ -209,140 +204,126 @@ def _create_blocks_from_calculated_stats(
                         "description": gender_insight
                     })
                     logger.info(f"[ANALYSE_AGENT] 사전 계산 통계 → 성별 차트 생성 (type={chart_type})")
-            
-            # 인구통계 인사이트 추출
-            if summary:
-                insights.append(f"**방문자 분석**: {summary}")
     
-    return blocks, insights
+    return blocks
 
 
-def _add_analysis_report_markdown(
+def _assign_block_ids(blocks: List[dict]) -> List[dict]:
+    """
+    각 데이터 블록에 고유 id를 부여합니다.
+    
+    Args:
+        blocks: 데이터 블록 배열
+    
+    Returns:
+        id가 부여된 블록 배열
+    """
+    result = []
+    block_counter = 1
+    
+    for block in blocks:
+        block_copy = block.copy()
+        block_type = block.get("type", "")
+        
+        # 데이터 블록(chart, table, image)에만 id 부여
+        if block_type in ("chart", "table", "image"):
+            block_copy["id"] = f"block_{block_counter}"
+            block_counter += 1
+        
+        result.append(block_copy)
+    
+    return result
+
+
+def _generate_paired_markdowns(
+    llm,
     blocks: List[dict],
     report_type: str = "user",
     org_name: str = "",
     report_topic: str = ""
 ) -> List[dict]:
     """
-    시스템 프롬프트 + 블록 정보를 기반으로 전체 분석 보고서 마크다운을 생성합니다.
+    각 데이터 블록에 대한 짝 마크다운 블록을 생성합니다.
     
-    생성된 보고서 마크다운 블록을 맨 앞에 추가하고,
-    각 블록 뒤에도 짝 마크다운을 추가합니다.
+    Args:
+        llm: LangChain LLM 인스턴스 (외부에서 주입)
+        blocks: id가 부여된 데이터 블록 배열
+        report_type: "user" 또는 "operator"
+        org_name: 기관명
+        report_topic: 보고서 주제
+    
+    Returns:
+        짝 마크다운 블록 배열: [{"type": "markdown", "paired_with": "block_1", "content": "..."}]
     """
-    from langchain_openai import ChatOpenAI
+    # id가 있는 블록만 추출
+    data_blocks = [b for b in blocks if b.get("id")]
     
-    # 블록 정보 수집
-    blocks_info = _collect_block_info(blocks)
+    if not data_blocks:
+        return []
     
-    if not blocks_info:
-        return blocks
-    
-    # 보고서 타입별 시스템 프롬프트
-    if report_type == "operator":
-        system_prompt = f"""당신은 '{org_name}'의 문화시설 운영 분석 전문가입니다.
-
-## 역할
-- 운영자/관리자를 위한 데이터 기반 분석 보고서 작성
-- 운영 개선점과 전략적 인사이트 제시
-
-## 말투
-- 전문적이고 격식 있는 보고서 어조
-- "~로 나타났습니다", "~을 고려해야 합니다" 등 격식체
-- 데이터 수치를 명확히 인용
-"""
-    else:
-        system_prompt = f"""당신은 '{org_name}'의 문화시설 안내 전문가입니다.
-
-## 역할  
-- 일반 이용자를 위한 친근하고 유익한 정보 제공
-- 방문 계획에 도움이 되는 인사이트 전달
-
-## 말투
-- 친근하면서도 신뢰감 있는 어조
-- "~네요", "~입니다" 등 부드러운 경어체
-- 쉽게 이해할 수 있도록 설명
+    # 블록 정보 텍스트 생성
+    blocks_text = ""
+    for b in data_blocks:
+        block_id = b.get("id", "")
+        block_type = b.get("type", "")
+        title = b.get("title", "") or b.get("alt", "")
+        description = b.get("description", "") or b.get("caption", "")
+        chart_type = b.get("chartType", "")
+        data_summary = _summarize_block_data(b)
+        
+        blocks_text += f"""
+### {block_id}: {title}
+- 타입: {block_type}{f" ({chart_type})" if chart_type else ""}
+- 기존 설명: {description if description else "(없음)"}
+- {data_summary}
 """
     
-    # 블록 정보를 텍스트로 변환
-    blocks_text = _format_blocks_for_prompt(blocks_info)
+    tone = "전문적이고 격식 있는 어조" if report_type == "operator" else "친근한 어조"
     
-    # LLM 프롬프트 구성: ## 헤더로 문단 구분
-    prompt = f"""{system_prompt}
+    prompt = f"""# 역할
+'{org_name}' 데이터 분석가. {tone}로 작성.
 
 # 보고서 주제
 {report_topic}
 
-# 분석 대상 데이터
+# 데이터 블록들
 {blocks_text}
 
 # 작업
-위 데이터를 바탕으로 분석 보고서를 작성해주세요.
+각 블록에 대한 짝 마크다운을 생성하세요. (블록당 1개)
 
-# 출력 형식 (중요!)
-반드시 ## 헤더로 각 문단을 구분하세요:
+# 출력 형식 (JSON 배열만 출력)
+[
+  {{"type": "markdown", "paired_with": "block_1", "content": "**분석 결과**\\n\\n데이터 해석 내용을 2-3문장으로 작성합니다."}},
+  {{"type": "markdown", "paired_with": "block_2", "content": "**분석 결과**\\n\\n데이터 해석 내용을 2-3문장으로 작성합니다."}}
+]
 
-## 📋 분석 요약
-(전체 데이터의 핵심 인사이트 2-3문장)
-
-## 📊 [블록1 제목] 분석
-(해당 데이터 분석 2-3문장)
-
-## 📊 [블록2 제목] 분석
-(해당 데이터 분석 2-3문장)
-
-... (각 블록마다 ##로 구분)
-
-## 💡 결론
-(종합 결론 및 시사점 2-3문장)
-
-# 주의사항
-- 반드시 ##로 각 섹션 시작
-- 수치를 구체적으로 인용
-- 각 블록의 기존 설명 참고
+# 규칙
+- paired_with: 해당 블록의 id
+- content: 수치를 구체적으로 인용한 분석 (2-3문장)
+- 기존 설명이 있으면 참고하되, 더 풍부하게 작성
+- 이모티콘 사용 금지
 """
     
     try:
-        llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.3)
         response = llm.invoke([HumanMessage(content=prompt)])
-        report_content = response.content
+        response_text = response.content
         
-        logger.info(f"[ANALYSE_AGENT] 분석 보고서 마크다운 생성 완료")
-        
-        # ## 기준으로 분리하여 각각 마크다운 블록 생성
-        markdown_blocks = _split_by_headers(report_content)
-        
-        # 결과: 요약 마크다운들 + 원본 블록들 인터리브 + 결론
-        result = _interleave_blocks_and_analyses(blocks, blocks_info, markdown_blocks)
-        
-        return result
+        # JSON 파싱
+        json_match = response_text.find("[")
+        json_end = response_text.rfind("]") + 1
+        if json_match != -1 and json_end > json_match:
+            json_str = response_text[json_match:json_end]
+            paired_markdowns = json.loads(json_str)
+            logger.info(f"[ANALYSE_AGENT] 짝 마크다운 {len(paired_markdowns)}개 생성")
+            return paired_markdowns
+        else:
+            logger.warning("[ANALYSE_AGENT] 짝 마크다운 JSON 파싱 실패")
+            return []
         
     except Exception as e:
-        logger.error(f"[ANALYSE_AGENT] 분석 보고서 생성 실패: {e}")
-        # 폴백: 원본 블록 그대로 반환
-        return blocks
-
-
-def _collect_block_info(blocks: List[dict], path_prefix: str = "") -> List[dict]:
-    """블록들을 순회하며 정보 수집"""
-    result = []
-    
-    for i, block in enumerate(blocks):
-        block_type = block.get("type", "")
-        
-        if block_type == "row":
-            result.extend(_collect_block_info(block.get("children", []), f"{path_prefix}{i}.children."))
-        elif block_type in ["chart", "table", "image"]:
-            result.append({
-                "index": str(len(result)),
-                "path": f"{path_prefix}{i}",
-                "type": block_type,
-                "title": block.get("title", "") or block.get("alt", ""),
-                "description": block.get("description", "") or block.get("caption", ""),
-                "chart_type": block.get("chartType", ""),
-                "data_summary": _summarize_block_data(block)
-            })
-    
-    return result
+        logger.error(f"[ANALYSE_AGENT] 짝 마크다운 생성 실패: {e}")
+        return []
 
 
 def _summarize_block_data(block: dict) -> str:
@@ -367,125 +348,132 @@ def _summarize_block_data(block: dict) -> str:
     return ""
 
 
-def _format_blocks_for_prompt(blocks_info: List[dict]) -> str:
-    """블록 정보를 프롬프트용 텍스트로 변환"""
-    text = ""
-    for info in blocks_info:
-        text += f"""
-### 블록 {int(info['index']) + 1}: {info['title']}
-- 타입: {info['type']} {f"({info['chart_type']})" if info['chart_type'] else ""}
-- 기존 설명: {info['description']}
-- {info['data_summary']}
-"""
-    return text
-
-
-def _split_by_headers(content: str) -> List[dict]:
-    """## 헤더 기준으로 마크다운을 분리하여 블록 리스트 생성"""
-    blocks = []
-    
-    # ## 로 분리
-    sections = content.split("\n## ")
-    
-    for i, section in enumerate(sections):
-        section = section.strip()
-        if not section:
-            continue
-        
-        # 첫 번째가 아니면 ## 복원
-        if i > 0:
-            section = "## " + section
-        elif not section.startswith("##"):
-            # 첫 섹션이 ##로 시작하지 않으면 스킵 (프롬프트 반복 등)
-            if "##" in section:
-                section = "## " + section.split("## ", 1)[1]
-            else:
-                continue
-        
-        # 헤더와 내용 분리
-        lines = section.split("\n", 1)
-        header = lines[0].strip()
-        body = lines[1].strip() if len(lines) > 1 else ""
-        
-        # 헤더에서 타입 추출 (요약/분석/결론)
-        block_type = "analysis"
-        if "요약" in header:
-            block_type = "summary"
-        elif "결론" in header:
-            block_type = "conclusion"
-        
-        blocks.append({
-            "header": header,
-            "body": body,
-            "type": block_type,
-            "full_content": section
-        })
-    
-    return blocks
-
-
-def _interleave_blocks_and_analyses(
+def _generate_comprehensive_analysis(
+    llm,
     data_blocks: List[dict],
-    blocks_info: List[dict],
-    markdown_sections: List[dict]
+    paired_markdowns: List[dict],
+    report_type: str = "user",
+    org_name: str = "",
+    report_topic: str = ""
 ) -> List[dict]:
-    """데이터 블록과 분석 마크다운을 인터리브하여 최종 결과 생성"""
-    result = []
+    """
+    총체적 분석을 수행하여 여러 문단의 마크다운 블록을 생성합니다.
     
-    # 요약 섹션들 먼저 추가
-    for section in markdown_sections:
-        if section["type"] == "summary":
-            result.append({
-                "type": "markdown",
-                "content": section["full_content"]
-            })
+    Args:
+        llm: LangChain LLM 인스턴스
+        data_blocks: id가 부여된 데이터 블록들 (chart, table, image)
+        paired_markdowns: 짝 마크다운 블록들
+        report_type: "user" 또는 "operator"
+        org_name: 기관명
+        report_topic: 보고서 주제
     
-    # 데이터 블록과 해당 분석 마크다운 매칭
-    analysis_sections = [s for s in markdown_sections if s["type"] == "analysis"]
+    Returns:
+        총체적 분석 마크다운 블록 배열 (role="comprehensive" 속성 포함)
+    """
+    if not data_blocks:
+        return []
     
-    for i, data_block in enumerate(data_blocks):
-        # 데이터 블록 추가
-        result.append(data_block)
+    # === 컨텍스트 수집 ===
+    
+    # 1. 데이터 블록 정보 수집
+    blocks_context = ""
+    for block in data_blocks:
+        block_id = block.get("id", "")
+        block_type = block.get("type", "")
+        title = block.get("title", "") or block.get("alt", "")
+        description = block.get("description", "") or block.get("caption", "")
+        chart_type = block.get("chartType", "")
+        data_summary = _summarize_block_data(block)
         
-        # 해당 블록의 분석 마크다운 찾기 (제목 매칭)
-        block_title = data_block.get("title", "") or data_block.get("alt", "")
-        
-        matched_analysis = None
-        for analysis in analysis_sections:
-            # 헤더에 블록 제목이 포함되어 있으면 매칭
-            if block_title and block_title in analysis["header"]:
-                matched_analysis = analysis
-                break
-        
-        # 매칭된 분석이 없으면 순서대로 매칭
-        if not matched_analysis and i < len(analysis_sections):
-            matched_analysis = analysis_sections[i]
-        
-        if matched_analysis:
-            result.append({
-                "type": "markdown",
-                "content": matched_analysis["full_content"]
-            })
-            # 사용한 분석은 제거
-            if matched_analysis in analysis_sections:
-                analysis_sections.remove(matched_analysis)
+        blocks_context += f"""
+[{block_id}] {title}
+- 유형: {block_type}{f" ({chart_type})" if chart_type else ""}
+- 기존 설명: {description if description else "(없음)"}
+- {data_summary}
+"""
     
-    # 남은 분석 섹션들 추가
-    for section in analysis_sections:
-        result.append({
-            "type": "markdown",
-            "content": section["full_content"]
-        })
+    # 2. 짝 마크다운 내용 수집
+    paired_context = ""
+    for md in paired_markdowns:
+        paired_with = md.get("paired_with", "")
+        content = md.get("content", "")
+        paired_context += f"""
+[{paired_with}에 대한 분석]
+{content}
+"""
     
-    # 결론 섹션들 마지막에 추가
-    for section in markdown_sections:
-        if section["type"] == "conclusion":
-            result.append({
-                "type": "markdown",
-                "content": section["full_content"]
-            })
+    # 3. 보고서 어조 설정
+    tone = "전문적이고 격식 있는 어조로 작성하세요. 운영자가 의사결정에 활용할 수 있도록 구체적인 수치와 시사점을 포함하세요." if report_type == "operator" else "친근하고 이해하기 쉬운 어조로 작성하세요. 일반 방문자가 이해할 수 있도록 설명하세요."
     
-    return result
+    # === 프롬프트 구성 ===
+    prompt = f"""# 역할
+당신은 '{org_name}' 데이터 분석 전문가입니다.
+{tone}
+
+# 보고서 주제
+{report_topic}
+
+# 분석 대상 데이터
+{blocks_context}
+
+# 개별 분석 내용
+{paired_context}
+
+# 작업
+위 데이터와 개별 분석을 종합하여 총체적 분석 보고서를 작성하세요.
+아래 템플릿에 맞춰 각 섹션을 작성하고, JSON 배열로 출력하세요.
+
+# 출력 형식 (JSON 배열만 출력)
+[
+  {{"section": "overview", "content": "## 개요\\n\\n(보고서의 배경과 목적, 분석 범위를 1-2문단으로 설명)"}},
+  {{"section": "key_findings", "content": "## 주요 발견 사항\\n\\n(가장 중요한 인사이트 3-4개를 글머리 기호로 정리)"}},
+  {{"section": "detailed_analysis", "content": "## 상세 분석\\n\\n(데이터 간 관계, 패턴, 트렌드를 2-3문단으로 심층 분석)"}},
+  {{"section": "implications", "content": "## 시사점 및 제언\\n\\n(분석 결과의 의미와 향후 방향성을 1-2문단으로 제시)"}}
+]
+
+# 규칙
+1. 이모티콘 사용 금지
+2. 구체적인 수치를 반드시 인용
+3. 각 섹션은 독립적으로 읽혀도 이해 가능해야 함
+4. 마크다운 형식 사용 (##, -, ** 등)
+5. 추측이나 가정 없이 데이터에 기반하여 작성
+"""
+    
+    try:
+        response = llm.invoke([HumanMessage(content=prompt)])
+        response_text = response.content
+        
+        # JSON 파싱
+        json_match = response_text.find("[")
+        json_end = response_text.rfind("]") + 1
+        
+        if json_match != -1 and json_end > json_match:
+            json_str = response_text[json_match:json_end]
+            sections = json.loads(json_str)
+            
+            # 각 섹션을 마크다운 블록으로 변환
+            comprehensive_blocks = []
+            for section in sections:
+                section_name = section.get("section", "")
+                content = section.get("content", "")
+                
+                if content:
+                    comprehensive_blocks.append({
+                        "type": "markdown",
+                        "role": "comprehensive",
+                        "section": section_name,
+                        "content": content
+                    })
+            
+            logger.info(f"[ANALYSE_AGENT] 총체적 분석 {len(comprehensive_blocks)}개 섹션 생성")
+            return comprehensive_blocks
+        else:
+            logger.warning("[ANALYSE_AGENT] 총체적 분석 JSON 파싱 실패")
+            return []
+        
+    except Exception as e:
+        logger.error(f"[ANALYSE_AGENT] 총체적 분석 생성 실패: {e}")
+        return []
 
 
 # =============================================================================
@@ -638,16 +626,15 @@ def create_analyse_agent(tool_llm, summary_llm, toolkit):
         logger.info(f"[ANALYSE_AGENT] 기관: {org_name}, 타입: {report_type}")
         logger.info(f"[ANALYSE_AGENT] research_payload: {len(research_payload)}개 항목")
         
-        # === 단계 1: 사전 계산된 통계에서 블록 + 인사이트 직접 생성 (LLM 스킵) ===
+        # === 단계 1: 사전 계산된 통계에서 블록 직접 생성 (LLM 스킵) ===
         calculated_stats, block_configs = _get_calculated_stats(research_payload)
         pre_generated_blocks = []
-        pre_generated_insights = []
         
         if calculated_stats:
-            pre_generated_blocks, pre_generated_insights = _create_blocks_from_calculated_stats(
+            pre_generated_blocks = _create_blocks_from_calculated_stats(
                 calculated_stats, block_configs
             )
-            logger.info(f"[ANALYSE_AGENT] 사전 계산 통계에서 {len(pre_generated_blocks)}개 블록, {len(pre_generated_insights)}개 인사이트 생성")
+            logger.info(f"[ANALYSE_AGENT] 사전 계산 통계에서 {len(pre_generated_blocks)}개 블록 생성")
             if block_configs:
                 logger.info(f"[ANALYSE_AGENT] 블록 설정 사용: {list(block_configs.keys())}")
         
@@ -655,15 +642,11 @@ def create_analyse_agent(tool_llm, summary_llm, toolkit):
         data_text = _prepare_data_for_analysis(research_payload)
         
         # === 단계 3: 시스템 프롬프트 생성 ===
-        # 사전 생성된 블록/인사이트 정보를 프롬프트에 포함
+        # 사전 생성된 블록 정보를 프롬프트에 포함
         pre_generated_info = ""
         if pre_generated_blocks:
             block_titles = [b.get("title", b.get("type", "")) for b in pre_generated_blocks]
             pre_generated_info = f"\n\n**주의: 다음 블록은 이미 생성되었으므로 다시 만들지 마세요:** {', '.join(block_titles)}"
-        
-        if pre_generated_insights:
-            insights_text = "\n".join(pre_generated_insights)
-            pre_generated_info += f"\n\n**이미 분석된 핵심 인사이트 (이를 바탕으로 추가 분석하세요):**\n{insights_text}"
         
         system_prompt = _build_analysis_prompt(
             report_type=report_type,
@@ -771,16 +754,40 @@ def create_analyse_agent(tool_llm, summary_llm, toolkit):
         
         logger.info(f"[ANALYSE_AGENT] 최종 블록: 사전생성 {len(pre_generated_blocks)}개 + LLM {len(llm_generated_blocks)}개 → 총 {len(block_drafts)}개")
         
-        # === 단계 6.5: 분석 보고서 마크다운 생성 (LLM 기반) ===
-        block_drafts = _add_analysis_report_markdown(
-            block_drafts,
+        # === 단계 7: 블록에 고유 id 부여 ===
+        block_drafts = _assign_block_ids(block_drafts)
+        logger.info(f"[ANALYSE_AGENT] 블록 id 부여 완료")
+        
+        # === 단계 8: 짝 마크다운 생성 (paired_with로 연결) ===
+        paired_markdowns = _generate_paired_markdowns(
+            llm=summary_llm,
+            blocks=block_drafts,
             report_type=report_type,
             org_name=org_name,
             report_topic=report_topic
         )
-        logger.info(f"[ANALYSE_AGENT] 짝 마크다운 추가 후: {len(block_drafts)}개 블록")
+        logger.info(f"[ANALYSE_AGENT] 짝 마크다운 {len(paired_markdowns)}개 생성")
         
-        # === 단계 7: Fallback - 블록이 없으면 에러 메시지 ===
+        # === 단계 9: 총체적 분석 생성 ===
+        # 데이터 블록 (id가 있는 블록들)과 짝 마크다운을 기반으로 종합 분석
+        data_blocks = [b for b in block_drafts if b.get("id")]
+        comprehensive_blocks = _generate_comprehensive_analysis(
+            llm=summary_llm,
+            data_blocks=data_blocks,
+            paired_markdowns=paired_markdowns,
+            report_type=report_type,
+            org_name=org_name,
+            report_topic=report_topic
+        )
+        logger.info(f"[ANALYSE_AGENT] 총체적 분석 {len(comprehensive_blocks)}개 섹션 생성")
+        
+        # === 블록 조합: 총체적 분석(앞) + 데이터 블록 + 짝 마크다운 ===
+        # Compose Agent가 최종 배치를 결정하지만, 기본 순서 제공
+        block_drafts.extend(paired_markdowns)
+        block_drafts.extend(comprehensive_blocks)
+        logger.info(f"[ANALYSE_AGENT] 전체 블록 조합 완료: {len(block_drafts)}개")
+        
+        # === 단계 10: Fallback - 블록이 없으면 에러 메시지 ===
         if not block_drafts:
             logger.warning(f"[ANALYSE_AGENT] 블록 생성 실패, fallback 메시지 생성")
             block_drafts = [{
