@@ -6,6 +6,7 @@ capstone DB에서 팀원 데이터를 조회합니다.
 
 import json
 import logging
+import math
 import re
 from typing import List, Dict, Any, Annotated, Optional
 from langchain_core.tools import tool
@@ -14,6 +15,15 @@ from app.db.context import get_capstone_db_context
 from app.agents.db_query_tool import DBQueryTool
 
 logger = logging.getLogger("uvicorn.error")
+
+
+def _safe_float(val: Any) -> float:
+    """안전하게 float 변환 (None, nan 처리)"""
+    try:
+        f = float(val or 0)
+        return 0.0 if math.isnan(f) else f
+    except (ValueError, TypeError):
+        return 0.0
 
 
 def _resolve_reference(value: Any, context: Dict[str, Any]) -> Any:
@@ -123,17 +133,19 @@ def _calculate_demographics_stats(demographics: List[Dict]) -> Dict[str, Any]:
         logger.info(f"[QUERY_EXECUTOR] LG U+ API 형식 감지 (m_20, f_20... 방문자 수)")
         age_groups = ["00", "10", "20", "30", "40", "50", "60", "70"]
         
-        # 전체 합계 계산
-        total = 0
+        # 전체 합계 계산 (_safe_float로 nan 처리)
+        total = 0.0
         for age in age_groups:
-            total += float(data.get(f"m_{age}", 0) or 0)
-            total += float(data.get(f"f_{age}", 0) or 0)
+            total += _safe_float(data.get(f"m_{age}"))
+            total += _safe_float(data.get(f"f_{age}"))
+        
+        logger.info(f"[QUERY_EXECUTOR] LG U+ 데이터 총합: {total}")
         
         if total > 0:
             # 20대 이상만 비율 계산
             for age in ["20", "30", "40", "50", "60", "70"]:
-                male_val = float(data.get(f"m_{age}", 0) or 0) / total * 100
-                female_val = float(data.get(f"f_{age}", 0) or 0) / total * 100
+                male_val = _safe_float(data.get(f"m_{age}")) / total * 100
+                female_val = _safe_float(data.get(f"f_{age}")) / total * 100
                 age_stats[f"{age}대"] = round(male_val + female_val, 1)
                 gender_stats["male"] += male_val
                 gender_stats["female"] += female_val
@@ -145,8 +157,8 @@ def _calculate_demographics_stats(demographics: List[Dict]) -> Dict[str, Any]:
         logger.info(f"[QUERY_EXECUTOR] 삼성카드 형식 감지 (mrcno_pct_...)")
         age_groups = ["20", "30", "40", "50", "60", "70"]
         for age in age_groups:
-            male_val = float(data.get(f"mrcno_pct_{age}_male", 0) or 0) * 100
-            female_val = float(data.get(f"mrcno_pct_{age}_female", 0) or 0) * 100
+            male_val = _safe_float(data.get(f"mrcno_pct_{age}_male")) * 100
+            female_val = _safe_float(data.get(f"mrcno_pct_{age}_female")) * 100
             age_stats[f"{age}대"] = round(male_val + female_val, 1)
             gender_stats["male"] += male_val
             gender_stats["female"] += female_val
@@ -156,8 +168,8 @@ def _calculate_demographics_stats(demographics: List[Dict]) -> Dict[str, Any]:
         logger.info(f"[QUERY_EXECUTOR] 페르소나 형식 감지 (persona_pct_...)")
         age_groups = ["20", "30", "40", "50", "60", "70"]
         for age in age_groups:
-            male_val = float(data.get(f"persona_pct_{age}_male", 0) or 0) * 100
-            female_val = float(data.get(f"persona_pct_{age}_female", 0) or 0) * 100
+            male_val = _safe_float(data.get(f"persona_pct_{age}_male")) * 100
+            female_val = _safe_float(data.get(f"persona_pct_{age}_female")) * 100
             age_stats[f"{age}대"] = round(male_val + female_val, 1)
             gender_stats["male"] += male_val
             gender_stats["female"] += female_val

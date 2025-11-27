@@ -1,5 +1,5 @@
 from typing import List, Dict, Optional, Any
-from sqlalchemy import text, Table, MetaData, select, and_, or_, desc, asc
+from sqlalchemy import text, Table, MetaData, select, and_, or_, desc, asc, case, func
 from sqlalchemy.orm import Session
 import json
 
@@ -67,9 +67,17 @@ class DBQueryTool:
                             value = value[0]
                         conditions.append(table.c[key] == value)
             
-            # 2. LIKE 검색 조건
+            # 2. LIKE 검색 조건 + 정확도 순 정렬
+            search_priority = None
             if search_column and search_value and search_column in table.c:
                 conditions.append(table.c[search_column].ilike(f"%{search_value}%"))
+                
+                # 정확도 우선순위: 정확히 일치 > 시작 > 포함
+                search_priority = case(
+                    (table.c[search_column] == search_value, 1),  # 정확히 일치
+                    (table.c[search_column].ilike(f"{search_value}%"), 2),  # 시작
+                    else_=3  # 포함
+                )
             
             # 3. 범위 조건
             if range_column and range_column in table.c:
@@ -82,7 +90,10 @@ class DBQueryTool:
             if conditions:
                 query = query.where(and_(*conditions))
             
-            # 정렬
+            # 정렬: 검색어 정확도 우선, 그 다음 지정된 정렬
+            if search_priority is not None:
+                query = query.order_by(search_priority)
+            
             if order_by and order_by in table.c:
                 if order_direction.lower() == "asc":
                     query = query.order_by(asc(table.c[order_by]))

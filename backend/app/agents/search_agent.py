@@ -122,6 +122,7 @@ def create_search_agent(llm, toolkit):
         latest_performance_image = state.get("latest_performance_image", "")
 
         logger.info(f"[SEARCH_AGENT] ====== 시작 ======")
+        logger.info(f"[SEARCH_AGENT] state: {state}")
         logger.info(f"[SEARCH_AGENT] 기관명: {org_name}")
         logger.info(f"[SEARCH_AGENT] 보고서 주제: {report_topic}")
 
