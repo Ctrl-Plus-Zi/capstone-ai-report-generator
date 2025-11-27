@@ -1,0 +1,86 @@
+{
+  "_guide": {
+    "description": "쿼리 번들 설정 파일 - 팀원 작성용",
+    "variables": {
+      "$org": "기관명 (request_context.organization_name)",
+      "$date": "현재 날짜 (request_context.current_date)",
+      "$ref.키.필드": "이전 쿼리 결과 참조 (예: $ref.facility.slta_cd)"
+    },
+    "query_format": {
+      "search": ["search", "테이블", "검색컬럼", "검색값", "저장키"],
+      "filter": ["filter", "테이블", {"필터조건": "값"}, "limit숫자", "저장키"]
+    },
+    "block_types": {
+      "bar": "막대 차트 (평점 분포 등)",
+      "doughnut": "도넛 차트 (비율 표시)",
+      "table": "테이블 (목록 표시)",
+      "llm": "LLM이 분석하여 적절한 블록 생성"
+    }
+  },
+
+  "bundles": {
+    "리뷰": {
+      "description": "구글맵/SNS 리뷰 데이터 수집",
+      "purpose": "리뷰 평점 분포와 고객 만족도 분석",
+      "queries": [
+        ["search", "sns_buzz_master_tbl", "slta_nm", "$org", "facility"],
+        ["filter", "sns_buzz_extract_contents", {"slta_cd": "$ref.facility.slta_cd"}, 100, "reviews"]
+      ],
+      "stats": ["review"],
+      "block": {
+        "type": "bar",
+        "title": "리뷰 평점 분포"
+      }
+    },
+
+    "인구통계": {
+      "description": "LG U+ 방문자 연령/성별 데이터",
+      "purpose": "주요 방문 연령대와 성별 비율 파악",
+      "queries": [
+        ["search", "lguplus_dpg_api_tot", "cutr_facl_all_nm", "$org", "lgu_facility"],
+        ["filter", "lguplus_dpg_api_tot", {"cutr_facl_id": "$ref.lgu_facility.cutr_facl_id"}, 12, "demographics"]
+      ],
+      "stats": ["demographics"],
+      "block": {
+        "type": "doughnut",
+        "title": "방문자 분포",
+        "split": ["age", "gender"]
+      }
+    },
+
+    "페르소나": {
+      "description": "LG U+ 방문자 페르소나 데이터",
+      "purpose": "방문객의 라이프스타일과 관심사 파악",
+      "queries": [
+        ["filter", "lguplus_dpg_persona_tot", {"cutr_facl_id": "$ref.lgu_facility.cutr_facl_id"}, 12, "persona"]
+      ],
+      "requires": ["인구통계"],
+      "block": {
+        "type": "llm"
+      }
+    }
+  },
+
+  "presets": {
+    "기본": {
+      "description": "모든 기관에 적용되는 기본 분석",
+      "bundles": ["리뷰", "인구통계", "페르소나"]
+    },
+    "공연장": {
+      "description": "예술의전당, 세종문화회관 등 공연장용",
+      "bundles": ["리뷰", "인구통계", "페르소나"]
+    },
+    "미술관": {
+      "description": "국립현대미술관, 국립중앙박물관 등",
+      "bundles": ["리뷰", "인구통계", "페르소나"]
+    }
+  },
+
+  "org_preset_mapping": {
+    "예술의전당": "공연장",
+    "세종문화회관": "공연장",
+    "국립현대미술관": "미술관",
+    "국립중앙박물관": "미술관"
+  }
+}
+

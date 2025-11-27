@@ -90,32 +90,48 @@ def _prepare_data_for_analysis(research_payload: List[dict]) -> str:
     return "\n".join(sections)
 
 
-def _get_calculated_stats(research_payload: List[dict]) -> dict:
-    """research_payload에서 calculated_stats 추출"""
+def _get_calculated_stats(research_payload: List[dict]) -> tuple[dict, dict]:
+    """research_payload에서 calculated_stats와 block_configs 추출"""
     for item in research_payload:
         if item.get("tool") == "calculated_stats":
-            return item.get("stats", {})
-    return {}
+            stats = item.get("stats", {})
+            block_configs = item.get("block_configs", {})
+            return stats, block_configs
+    return {}, {}
 
 
-def _create_blocks_from_calculated_stats(calculated_stats: dict) -> tuple[List[dict], List[str]]:
+def _create_blocks_from_calculated_stats(
+    calculated_stats: dict,
+    block_configs: dict = None
+) -> tuple[List[dict], List[str]]:
     """
     사전 계산된 통계(calculated_stats)에서 직접 블록과 인사이트를 생성합니다.
     
     search_agent/query_executor에서 이미 계산된 통계이므로
     LLM 호출 없이 바로 블록으로 변환합니다.
     
+    Args:
+        calculated_stats: 계산된 통계 딕셔너리
+        block_configs: 번들별 블록 설정 (query_bundles.json에서 로드)
+    
     Returns:
         (blocks, insights): 생성된 블록 목록과 인사이트 문자열 목록
     """
     blocks = []
     insights = []
+    block_configs = block_configs or {}
     
     # 리뷰 통계 → 평점 분포 차트
     if "review_stats" in calculated_stats:
         stats = calculated_stats["review_stats"]
         distribution = stats.get("rating_distribution", {})
         summary = stats.get("summary", "")
+        
+        # 블록 설정 가져오기 (있으면 사용, 없으면 기본값)
+        review_config = block_configs.get("리뷰", {})
+        chart_type = review_config.get("type", "bar")
+        title = review_config.get("title", "리뷰 평점 분포")
+        purpose = review_config.get("purpose", "")
         
         if distribution:
             labels = ["5점", "4점", "3점", "2점", "1점"]
@@ -129,8 +145,8 @@ def _create_blocks_from_calculated_stats(calculated_stats: dict) -> tuple[List[d
             
             blocks.append({
                 "type": "chart",
-                "chartType": "bar",
-                "title": "리뷰 평점 분포",
+                "chartType": chart_type,
+                "title": title,
                 "data": {"labels": labels, "values": values},
                 "description": summary
             })
@@ -139,53 +155,61 @@ def _create_blocks_from_calculated_stats(calculated_stats: dict) -> tuple[List[d
             if summary:
                 insights.append(f"**리뷰 분석**: {summary}")
             
-            logger.info(f"[ANALYSE_AGENT] 사전 계산 통계 → 리뷰 평점 차트 생성")
+            logger.info(f"[ANALYSE_AGENT] 사전 계산 통계 → 리뷰 평점 차트 생성 (type={chart_type})")
     
     # 인구통계 → 연령대/성별 차트
     if "demographics_stats" in calculated_stats:
         stats = calculated_stats["demographics_stats"]
         summary = stats.get("summary", "")
         
+        # 블록 설정 가져오기
+        demo_config = block_configs.get("인구통계", {})
+        chart_type = demo_config.get("type", "doughnut")
+        split = demo_config.get("split", ["age", "gender"])
+        purpose = demo_config.get("purpose", "")
+        
         if stats.get("has_data"):
             # 연령대 분포
-            age_dist = stats.get("age_distribution", {})
-            if age_dist:
-                blocks.append({
-                    "type": "chart",
-                    "chartType": "doughnut",
-                    "title": "연령대별 방문자 분포",
-                    "data": {
-                        "labels": list(age_dist.keys()),
-                        "values": list(age_dist.values())
-                    },
-                    "description": summary
-                })
-                logger.info(f"[ANALYSE_AGENT] 사전 계산 통계 → 연령대 차트 생성")
+            if "age" in split:
+                age_dist = stats.get("age_distribution", {})
+                if age_dist:
+                    blocks.append({
+                        "type": "chart",
+                        "chartType": chart_type,
+                        "title": "연령대별 방문자 분포",
+                        "data": {
+                            "labels": list(age_dist.keys()),
+                            "values": list(age_dist.values())
+                        },
+                        "description": summary
+                    })
+                    logger.info(f"[ANALYSE_AGENT] 사전 계산 통계 → 연령대 차트 생성 (type={chart_type})")
             
             # 성별 분포
-            gender_dist = stats.get("gender_distribution", {})
-            if gender_dist:
-                # 성별 인사이트 생성
-                male_pct = gender_dist.get("남성", 0)
-                female_pct = gender_dist.get("여성", 0)
-                if male_pct > female_pct:
-                    gender_insight = f"남성 방문자({male_pct}%)가 여성({female_pct}%)보다 많습니다."
-                elif female_pct > male_pct:
-                    gender_insight = f"여성 방문자({female_pct}%)가 남성({male_pct}%)보다 많습니다."
-                else:
-                    gender_insight = f"남녀 방문자 비율이 비슷합니다 ({male_pct}%)."
-                
-                blocks.append({
-                    "type": "chart",
-                    "chartType": "doughnut",
-                    "title": "성별 방문자 분포",
-                    "data": {
-                        "labels": list(gender_dist.keys()),
-                        "values": list(gender_dist.values())
-                    },
-                    "description": gender_insight
-                })
-                logger.info(f"[ANALYSE_AGENT] 사전 계산 통계 → 성별 차트 생성")
+            if "gender" in split:
+                gender_dist = stats.get("gender_distribution", {})
+                if gender_dist:
+                    # 성별 인사이트 생성
+                    male_pct = gender_dist.get("남성", 0)
+                    female_pct = gender_dist.get("여성", 0)
+                    if male_pct > female_pct:
+                        gender_insight = f"남성 방문자({male_pct}%)가 여성({female_pct}%)보다 많습니다."
+                    elif female_pct > male_pct:
+                        gender_insight = f"여성 방문자({female_pct}%)가 남성({male_pct}%)보다 많습니다."
+                    else:
+                        gender_insight = f"남녀 방문자 비율이 비슷합니다 ({male_pct}%)."
+                    
+                    blocks.append({
+                        "type": "chart",
+                        "chartType": chart_type,
+                        "title": "성별 방문자 분포",
+                        "data": {
+                            "labels": list(gender_dist.keys()),
+                            "values": list(gender_dist.values())
+                        },
+                        "description": gender_insight
+                    })
+                    logger.info(f"[ANALYSE_AGENT] 사전 계산 통계 → 성별 차트 생성 (type={chart_type})")
             
             # 인구통계 인사이트 추출
             if summary:
@@ -347,13 +371,17 @@ def create_analyse_agent(tool_llm, summary_llm, toolkit):
         logger.info(f"[ANALYSE_AGENT] research_payload: {len(research_payload)}개 항목")
         
         # === 단계 1: 사전 계산된 통계에서 블록 + 인사이트 직접 생성 (LLM 스킵) ===
-        calculated_stats = _get_calculated_stats(research_payload)
+        calculated_stats, block_configs = _get_calculated_stats(research_payload)
         pre_generated_blocks = []
         pre_generated_insights = []
         
         if calculated_stats:
-            pre_generated_blocks, pre_generated_insights = _create_blocks_from_calculated_stats(calculated_stats)
+            pre_generated_blocks, pre_generated_insights = _create_blocks_from_calculated_stats(
+                calculated_stats, block_configs
+            )
             logger.info(f"[ANALYSE_AGENT] 사전 계산 통계에서 {len(pre_generated_blocks)}개 블록, {len(pre_generated_insights)}개 인사이트 생성")
+            if block_configs:
+                logger.info(f"[ANALYSE_AGENT] 블록 설정 사용: {list(block_configs.keys())}")
         
         # === 단계 2: 데이터 준비 (LLM용) ===
         data_text = _prepare_data_for_analysis(research_payload)

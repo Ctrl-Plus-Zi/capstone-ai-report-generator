@@ -21,6 +21,7 @@ from langchain_core.prompts import ChatPromptTemplate
 
 from app.agents.db_agent_tools import DB_SCHEMA_CONTEXT
 from app.agents.query_executor import execute_data_queries
+from app.agents.query_bundle_loader import get_all_for_org
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -193,24 +194,13 @@ def create_search_agent(llm, toolkit):
             logger.error(f"[SEARCH_AGENT] [단계1] DB 계획 LLM 실패: {e}")
             db_response = None
         
-        default_queries = [
-            # 1. SNS 버즈 시설 검색 (구글맵 리뷰용)
-            {"action": "search", "table": "sns_buzz_master_tbl",
-             "params": {"search_column": "slta_nm", "search_value": org_name}, "save_as": "facility"},
-            # 2. 구글맵 리뷰 조회
-            {"action": "filter", "table": "sns_buzz_extract_contents",
-             "params": {"filters": {"slta_cd": "{facility.slta_cd}"}, "limit": 100}, "save_as": "reviews"},
-            # 3. LG U+ API에서 시설 검색 (인구통계용 cutr_facl_id 획득)
-            {"action": "search", "table": "lguplus_dpg_api_tot",
-             "params": {"search_column": "cutr_facl_all_nm", "search_value": org_name}, "save_as": "lgu_facility"},
-            # 4. LG U+ 방문자 통계
-            {"action": "filter", "table": "lguplus_dpg_api_tot",
-             "params": {"filters": {"cutr_facl_id": "{lgu_facility.cutr_facl_id}"}, "limit": 12}, "save_as": "demographics"},
-            # 5. LG U+ 페르소나
-            {"action": "filter", "table": "lguplus_dpg_persona_tot",
-             "params": {"filters": {"cutr_facl_id": "{lgu_facility.cutr_facl_id}"}, "limit": 12}, "save_as": "persona"}
-        ]
-        default_stats = ["review_stats", "demographics_stats"]
+        # === 설정 기반 쿼리 번들 로드 ===
+        default_queries, bundle_stats, block_configs = get_all_for_org(org_name)
+        logger.info(f"[SEARCH_AGENT] [단계1] 번들 로드: {len(default_queries)}개 쿼리, 통계: {bundle_stats}")
+        
+        # 통계 이름 매핑 (번들 설정 → query_executor 형식)
+        stats_name_map = {"review": "review_stats", "demographics": "demographics_stats"}
+        default_stats = [stats_name_map.get(s, f"{s}_stats") for s in bundle_stats]
         
         llm_queries: List[Dict[str, Any]] = []
         llm_stats: List[str] = []
@@ -345,9 +335,10 @@ def create_search_agent(llm, toolkit):
                     research_payload.append({
                         "tool": "calculated_stats",
                         "stats": stats,
+                        "block_configs": block_configs,  # 번들별 블록 설정 전달
                         "reasoning": "리뷰 평점 분포와 방문자 인구통계를 분석하기 위해 자동 계산된 통계입니다."
                     })
-                    logger.info(f"[SEARCH_AGENT] [단계3] 통계 추가: {list(stats.keys())}")
+                    logger.info(f"[SEARCH_AGENT] [단계3] 통계 추가: {list(stats.keys())}, 블록 설정: {list(block_configs.keys())}")
                 
                 if db_result.get("errors"):
                     logger.error(f"[SEARCH_AGENT] [단계3] DB 오류: {db_result['errors']}")
