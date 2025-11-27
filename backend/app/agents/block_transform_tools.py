@@ -119,7 +119,7 @@ def transform_demographics_to_gender_chart(
 
 @tool
 def transform_reviews_to_rating_chart(
-    review_data: Annotated[List[Dict[str, Any]], "google_map_reviews 테이블에서 조회한 리뷰 데이터 리스트 (sns_content_rating 포함)"]
+    review_data: Annotated[List[Dict[str, Any]], "sns_buzz_extract_contents 테이블에서 조회한 리뷰 데이터 리스트 (sns_content_rating 포함)"]
 ) -> dict:
     """구글맵 리뷰 데이터를 평점 분포 막대 차트로 변환합니다.
     

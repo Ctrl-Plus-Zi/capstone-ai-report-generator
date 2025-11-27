@@ -144,10 +144,26 @@ function App() {
   // 사이드바 열림/닫힘 상태 (from Incoming)
   const [savedOpen, setSavedOpen] = useState(true); 
   
-  /* 사용자가 생성한 보고서 저장 */
-  const [savedReports, setSavedReports] = useState<AdvancedReportResponse[]>(
-    JSON.parse(localStorage.getItem("savedReports") || "[]")
-  );
+  /* 사용자가 생성한 보고서 저장 (서버에서 가져옴) */
+  const [savedReports, setSavedReports] = useState<AdvancedReportResponse[]>([]);
+  
+  // 서버에서 최근 보고서 목록 가져오기
+  const refreshReportList = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/report/v2?limit=20`);
+      if (res.ok) {
+        const reports = await res.json();
+        setSavedReports(reports);
+      }
+    } catch (err) {
+      console.error("보고서 목록 조회 실패:", err);
+    }
+  }, []);
+  
+  // 초기 로드
+  useEffect(() => {
+    refreshReportList();
+  }, [refreshReportList]);
 
   // 하위 보고서 관리 (reportId -> childReports[])
   const [childReportsMap, setChildReportsMap] = useState<Map<number, AdvancedReportResponse[]>>(new Map());
@@ -216,9 +232,9 @@ function App() {
    * 보고서 삭제 핸들러
    * ---------------------------- */
   const handleDeleteReport = (id: number) => {
+    // 로컬 상태에서만 삭제 (서버 삭제 API 필요시 추가)
     const updated = savedReports.filter(report => report.id !== id);
     setSavedReports(updated);
-    localStorage.setItem("savedReports", JSON.stringify(updated));
     if (response?.id === id) setResponse(null);
     // 하위 보고서 맵에서도 제거
     setChildReportsMap(prev => {
@@ -286,15 +302,13 @@ function App() {
           // v2 API 응답 처리
           setBlockResponse(result as BlockReportResponse);
           setResponse(null); // 기존 응답 초기화
+          
+          // 서버에서 보고서 목록 새로고침
+          await refreshReportList();
         } else {
           // 기존 API 응답 처리
           setResponse(result);
           setBlockResponse(null);
-          
-          /* 사용자가 생성한 보고서 저장 (기존 방식만) */
-          const updated = [...savedReports, result];
-          setSavedReports(updated);
-          localStorage.setItem("savedReports", JSON.stringify(updated));
           
           // 하위 보고서인 경우 부모 보고서의 하위 보고서 목록 업데이트
           if (result.parent_report_id) {
@@ -355,11 +369,6 @@ function App() {
         // 새로 생성된 보고서를 현재 보고서로 설정
         setResponse(result);
         setCurrentStep(3); // 결과 확인 단계로 이동하여 상단 질문창 숨김
-        
-        // 저장된 보고서 목록에도 추가
-        const updated = [...savedReports, result];
-        setSavedReports(updated);
-        localStorage.setItem("savedReports", JSON.stringify(updated));
         
         // ref에서 로드 상태 초기화 (새 보고서를 위해)
         loadedReportsRef.current.delete(result.id);
@@ -1171,7 +1180,14 @@ function App() {
                     report={r}
                     response={response}
                     onReportClick={async (report) => {
-                      setResponse(report);
+                      // v2 블록 보고서인지 확인 (blocks 필드가 있으면 v2)
+                      if ('blocks' in report && Array.isArray(report.blocks)) {
+                        setBlockResponse(report as unknown as BlockReportResponse);
+                        setResponse(null);
+                      } else {
+                        setResponse(report);
+                        setBlockResponse(null);
+                      }
                       setCurrentStep(3); // 결과 확인 단계로 이동하여 상단 질문창 숨김
                       // 하위 보고서 로드
                       if (!childReportsMap.has(report.id)) {
@@ -1518,7 +1534,14 @@ function App() {
               parentReportId={response.id}
               childReports={childReportsMap.get(response.id) || []}
               onReportClick={(report) => {
-                setResponse(report);
+                // v2 블록 보고서인지 확인
+                if ('blocks' in report && Array.isArray(report.blocks)) {
+                  setBlockResponse(report as unknown as BlockReportResponse);
+                  setResponse(null);
+                } else {
+                  setResponse(report);
+                  setBlockResponse(null);
+                }
                 setCurrentStep(3); // 결과 확인 단계로 이동하여 상단 질문창 숨김
               }}
               onFetchChildren={fetchChildReports}

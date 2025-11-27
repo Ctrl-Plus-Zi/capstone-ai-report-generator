@@ -1,205 +1,179 @@
 {
   "facilities": {
-    "description": "문화시설 기본 정보 테이블 - 삼성카드/LG U+ 데이터 기반",
-    "row_count": 7178,
-    "columns": {
-      "cutr_facl_id": {"type": "BIGINT", "nullable": false, "description": "시설 고유 ID (PK) - 다른 테이블과 연결하는 핵심 키"},
-      "mrcno": {"type": "BIGINT", "nullable": true, "description": "가맹점 번호"},
-      "mrc_snbd_nm": {"type": "VARCHAR", "nullable": true, "description": "시설명 (예: 국립중앙박물관, 예술의전당)"},
-      "tco_tobz_c": {"type": "VARCHAR", "nullable": true, "description": "업종 코드"},
-      "nasd_c": {"type": "VARCHAR", "nullable": true, "description": "행정동 코드"},
-      "pnu": {"type": "VARCHAR", "nullable": true, "description": "필지 고유 번호"},
-      "lon": {"type": "DOUBLE PRECISION", "nullable": true, "description": "경도 (longitude)"},
-      "lat": {"type": "DOUBLE PRECISION", "nullable": true, "description": "위도 (latitude)"}
+    "desc": "문화시설 기본 정보 (삼성카드)",
+    "cols": {
+      "cutr_facl_id": "시설ID(PK,BIGINT)",
+      "mrcno": "가맹점번호(BIGINT)",
+      "mrc_snbd_nm": "시설명(TEXT)",
+      "tco_tobz_c": "업종코드(TEXT)",
+      "nasd_c": "행정동코드(TEXT)",
+      "lon": "경도(FLOAT)",
+      "lat": "위도(FLOAT)"
     },
-    "primary_key": "cutr_facl_id",
-    "searchable_fields": ["mrc_snbd_nm", "tco_tobz_c", "nasd_c"]
+    "search": ["mrc_snbd_nm"]
   },
 
-  "google_map_facilities": {
-    "description": "구글맵에서 수집한 시설 정보 - 리뷰 데이터와 연결",
-    "row_count": 95,
-    "columns": {
-      "id": {"type": "INTEGER", "nullable": false, "description": "자동 생성 ID (PK)"},
-      "slta_cd": {"type": "VARCHAR(50)", "nullable": false, "description": "시설 코드 (예: SLTA035) - google_map_reviews와 연결 키"},
-      "slta_nm": {"type": "VARCHAR(255)", "nullable": false, "description": "시설명 (예: 국립중앙박물관, 경복궁)"},
-      "slta_type": {"type": "VARCHAR(100)", "nullable": true, "description": "시설 유형 (예: 관광지, 공원, 시장)"},
-      "slta_addr": {"type": "VARCHAR(500)", "nullable": true, "description": "주소"},
-      "slta_cor_x_axis": {"type": "DOUBLE PRECISION", "nullable": true, "description": "경도 (X좌표)"},
-      "slta_cor_y_axis": {"type": "DOUBLE PRECISION", "nullable": true, "description": "위도 (Y좌표)"},
-      "cutr_facl_id": {"type": "INTEGER", "nullable": true, "description": "facilities 테이블 연결 ID (대부분 NULL)"},
-      "created_at": {"type": "TIMESTAMP", "nullable": false, "description": "데이터 수집 일시"}
+  "sns_buzz_master_tbl": {
+    "desc": "SNS버즈 시설 마스터 (구글맵 시설)",
+    "cols": {
+      "slta_cd": "시설코드(PK,TEXT) - sns_buzz_extract_contents 연결키",
+      "slta_nm": "시설명(TEXT)",
+      "slta_type": "시설유형(TEXT) - 관광지,공원,시장 등",
+      "slta_addr": "주소(TEXT)",
+      "slta_cor_x_axis": "경도(FLOAT)",
+      "slta_cor_y_axis": "위도(FLOAT)",
+      "slta_vstr_grde": "방문자등급(TEXT) - S,A,B,C",
+      "slta_sale_grde": "매출등급(TEXT)",
+      "slta_size_grde": "규모등급(TEXT)"
     },
-    "primary_key": "id",
-    "foreign_keys": {"slta_cd": "google_map_reviews.slta_cd"},
-    "searchable_fields": ["slta_cd", "slta_nm", "slta_type", "slta_addr"]
+    "search": ["slta_nm", "slta_cd", "slta_type"]
   },
 
-  "google_map_reviews": {
-    "description": "구글맵 리뷰 데이터 - 방문자 평점 및 리뷰 텍스트",
-    "row_count": 48966,
-    "columns": {
-      "id": {"type": "INTEGER", "nullable": false, "description": "자동 생성 ID (PK)"},
-      "buzz_id": {"type": "VARCHAR(100)", "nullable": false, "description": "리뷰 고유 ID"},
-      "slta_cd": {"type": "VARCHAR(50)", "nullable": false, "description": "시설 코드 (FK) - google_map_facilities와 연결"},
-      "sns_type": {"type": "VARCHAR(50)", "nullable": true, "description": "SNS 유형 (googlemap)"},
-      "sns_content_id": {"type": "VARCHAR(200)", "nullable": true, "description": "구글맵 콘텐츠 ID"},
-      "sns_content_issue_date": {"type": "TIMESTAMP", "nullable": true, "description": "리뷰 작성 일시"},
-      "sns_content_rating": {"type": "DOUBLE PRECISION", "nullable": true, "description": "평점 (1.0 ~ 5.0)"},
-      "sns_content_original_text": {"type": "TEXT", "nullable": true, "description": "리뷰 원문 (원어)"},
-      "sns_content_translated_text": {"type": "TEXT", "nullable": true, "description": "번역된 리뷰 텍스트"},
-      "sns_content_original_text_link": {"type": "VARCHAR(500)", "nullable": true, "description": "리뷰 원본 링크"},
-      "created_at": {"type": "TIMESTAMP", "nullable": false, "description": "데이터 수집 일시"}
+  "sns_buzz_extract_contents": {
+    "desc": "SNS버즈 리뷰 콘텐츠 (구글맵 리뷰)",
+    "cols": {
+      "buzz_id": "리뷰ID(TEXT)",
+      "slta_cd": "시설코드(FK,TEXT) - sns_buzz_master_tbl 연결",
+      "sns_type": "SNS유형(TEXT) - googlemap",
+      "sns_content_rating": "평점(FLOAT) - 1.0~5.0",
+      "sns_content_issue_date": "작성일시(TEXT)",
+      "sns_content_original_text": "리뷰원문(TEXT)",
+      "sns_content_translated_text": "번역텍스트(TEXT)"
     },
-    "primary_key": "id",
-    "foreign_keys": {"slta_cd": "google_map_facilities.slta_cd"},
-    "searchable_fields": ["slta_cd", "sns_content_original_text", "sns_content_translated_text"]
+    "search": ["slta_cd"]
   },
 
   "mrcno_demographics": {
-    "description": "방문자 연령/성별 인구통계 데이터 - 삼성카드 기반",
-    "row_count": 14133,
-    "columns": {
-      "id": {"type": "INTEGER", "nullable": false, "description": "자동 생성 ID (PK)"},
-      "cutr_facl_id": {"type": "BIGINT", "nullable": false, "description": "시설 ID (FK, INTEGER) - facilities 테이블과 연결"},
-      "cri_ym": {"type": "INTEGER", "nullable": false, "description": "기준 연월 (YYYYMM 형식, 예: 202410)"},
-      "nebhd_dv": {"type": "VARCHAR", "nullable": true, "description": "주변 지역 구분 (예: 3.3km)"},
-      "rn": {"type": "INTEGER", "nullable": true, "description": "순위"},
-      "mrcno_pct_20_male": {"type": "DOUBLE PRECISION", "nullable": true, "description": "20대 남성 비율 (0~1, 100 곱하면 %)"},
-      "mrcno_pct_30_male": {"type": "DOUBLE PRECISION", "nullable": true, "description": "30대 남성 비율"},
-      "mrcno_pct_40_male": {"type": "DOUBLE PRECISION", "nullable": true, "description": "40대 남성 비율"},
-      "mrcno_pct_50_male": {"type": "DOUBLE PRECISION", "nullable": true, "description": "50대 남성 비율"},
-      "mrcno_pct_60_male": {"type": "DOUBLE PRECISION", "nullable": true, "description": "60대 남성 비율"},
-      "mrcno_pct_70_male": {"type": "DOUBLE PRECISION", "nullable": true, "description": "70대 이상 남성 비율"},
-      "mrcno_pct_20_female": {"type": "DOUBLE PRECISION", "nullable": true, "description": "20대 여성 비율"},
-      "mrcno_pct_30_female": {"type": "DOUBLE PRECISION", "nullable": true, "description": "30대 여성 비율"},
-      "mrcno_pct_40_female": {"type": "DOUBLE PRECISION", "nullable": true, "description": "40대 여성 비율"},
-      "mrcno_pct_50_female": {"type": "DOUBLE PRECISION", "nullable": true, "description": "50대 여성 비율"},
-      "mrcno_pct_60_female": {"type": "DOUBLE PRECISION", "nullable": true, "description": "60대 여성 비율"},
-      "mrcno_pct_70_female": {"type": "DOUBLE PRECISION", "nullable": true, "description": "70대 이상 여성 비율"},
-      "mrcno_foreign_rt": {"type": "DOUBLE PRECISION", "nullable": true, "description": "외국인 방문 비율"}
+    "desc": "방문자 연령/성별 인구통계 (삼성카드)",
+    "cols": {
+      "cutr_facl_id": "시설ID(FK,BIGINT) - facilities 연결",
+      "cri_ym": "기준연월(INT) - YYYYMM 형식, 예: 202501",
+      "nebhd_dv": "주변지역구분(TEXT) - 3.3km 등",
+      "mrcno_pct_20_male~70_male": "20~70대 남성비율(FLOAT) - 0~1",
+      "mrcno_pct_20_female~70_female": "20~70대 여성비율(FLOAT) - 0~1",
+      "mrcno_foreign_rt": "외국인비율(FLOAT)"
     },
-    "primary_key": "id",
-    "foreign_keys": {"cutr_facl_id": "facilities.cutr_facl_id"},
-    "searchable_fields": ["cutr_facl_id", "cri_ym", "nebhd_dv"]
+    "search": ["cutr_facl_id", "cri_ym"]
   },
 
   "persona_metrics": {
-    "description": "방문자 페르소나 상세 지표 - LG U+ 데이터 기반, 50+ 지표 포함",
-    "row_count": 61636,
-    "columns": {
-      "id": {"type": "INTEGER", "nullable": false, "description": "자동 생성 ID (PK)"},
-      "cutr_facl_id": {"type": "BIGINT", "nullable": false, "description": "시설 ID (FK) - facilities 테이블과 연결"},
-      "cri_ym": {"type": "INTEGER", "nullable": false, "description": "기준 연월 (YYYYMM 형식, 예: 202408)"},
-      
-      "persona_pct_20_male": {"type": "DOUBLE PRECISION", "nullable": true, "description": "20대 남성 비율 (0~1)"},
-      "persona_pct_30_male": {"type": "DOUBLE PRECISION", "nullable": true, "description": "30대 남성 비율"},
-      "persona_pct_40_male": {"type": "DOUBLE PRECISION", "nullable": true, "description": "40대 남성 비율"},
-      "persona_pct_50_male": {"type": "DOUBLE PRECISION", "nullable": true, "description": "50대 남성 비율"},
-      "persona_pct_60_male": {"type": "DOUBLE PRECISION", "nullable": true, "description": "60대 남성 비율"},
-      "persona_pct_70_male": {"type": "DOUBLE PRECISION", "nullable": true, "description": "70대 이상 남성 비율"},
-      "persona_pct_20_female": {"type": "DOUBLE PRECISION", "nullable": true, "description": "20대 여성 비율"},
-      "persona_pct_30_female": {"type": "DOUBLE PRECISION", "nullable": true, "description": "30대 여성 비율"},
-      "persona_pct_40_female": {"type": "DOUBLE PRECISION", "nullable": true, "description": "40대 여성 비율"},
-      "persona_pct_50_female": {"type": "DOUBLE PRECISION", "nullable": true, "description": "50대 여성 비율"},
-      "persona_pct_60_female": {"type": "DOUBLE PRECISION", "nullable": true, "description": "60대 여성 비율"},
-      "persona_pct_70_female": {"type": "DOUBLE PRECISION", "nullable": true, "description": "70대 이상 여성 비율"},
-      "persona_foreign_rt": {"type": "DOUBLE PRECISION", "nullable": true, "description": "외국인 비율"},
-      
-      "income_01": {"type": "DOUBLE PRECISION", "nullable": true, "description": "저소득층 비율"},
-      "income_02": {"type": "DOUBLE PRECISION", "nullable": true, "description": "중소득층 비율"},
-      "income_03": {"type": "DOUBLE PRECISION", "nullable": true, "description": "고소득층 비율"},
-      
-      "clt_ev_acti_inrt_tndc_score": {"type": "DOUBLE PRECISION", "nullable": true, "description": "문화/이벤트 활동 관심 성향 점수"},
-      "dom_trv_inrt_tndc_score": {"type": "DOUBLE PRECISION", "nullable": true, "description": "국내 여행 관심 성향 점수"},
-      "frn_trv_inrt_tndc_score": {"type": "DOUBLE PRECISION", "nullable": true, "description": "해외 여행 관심 성향 점수"},
-      "hl_mngt_inrt_tndc_score": {"type": "DOUBLE PRECISION", "nullable": true, "description": "건강 관리 관심 성향 점수"},
-      "prmm_csm_tndc_score": {"type": "DOUBLE PRECISION", "nullable": true, "description": "프리미엄 소비 성향 점수"},
-      "prc_snsv_csm_tndc_score": {"type": "DOUBLE PRECISION", "nullable": true, "description": "가격 민감 소비 성향 점수"},
-      "dgtl_tndc_score": {"type": "DOUBLE PRECISION", "nullable": true, "description": "디지털 성향 점수"},
-      
-      "per_pet": {"type": "DOUBLE PRECISION", "nullable": true, "description": "반려동물 보유 지수"},
-      "active_senior": {"type": "DOUBLE PRECISION", "nullable": true, "description": "액티브 시니어 지수"},
-      
-      "we_rt": {"type": "DOUBLE PRECISION", "nullable": true, "description": "주말 방문 비율"},
-      "wk_rt": {"type": "DOUBLE PRECISION", "nullable": true, "description": "평일 방문 비율"},
-      
-      "ct_00_rt": {"type": "DOUBLE PRECISION", "nullable": true, "description": "0시 방문 비율"},
-      "ct_01_rt": {"type": "DOUBLE PRECISION", "nullable": true, "description": "1시 방문 비율"},
-      "ct_02_rt": {"type": "DOUBLE PRECISION", "nullable": true, "description": "2시 방문 비율"},
-      "ct_03_rt": {"type": "DOUBLE PRECISION", "nullable": true, "description": "3시 방문 비율"},
-      "ct_04_rt": {"type": "DOUBLE PRECISION", "nullable": true, "description": "4시 방문 비율"},
-      "ct_05_rt": {"type": "DOUBLE PRECISION", "nullable": true, "description": "5시 방문 비율"},
-      "ct_06_rt": {"type": "DOUBLE PRECISION", "nullable": true, "description": "6시 방문 비율"},
-      "ct_07_rt": {"type": "DOUBLE PRECISION", "nullable": true, "description": "7시 방문 비율"},
-      "ct_08_rt": {"type": "DOUBLE PRECISION", "nullable": true, "description": "8시 방문 비율"},
-      "ct_09_rt": {"type": "DOUBLE PRECISION", "nullable": true, "description": "9시 방문 비율"},
-      "ct_10_rt": {"type": "DOUBLE PRECISION", "nullable": true, "description": "10시 방문 비율"},
-      "ct_11_rt": {"type": "DOUBLE PRECISION", "nullable": true, "description": "11시 방문 비율"},
-      "ct_12_rt": {"type": "DOUBLE PRECISION", "nullable": true, "description": "12시(점심) 방문 비율"},
-      "ct_13_rt": {"type": "DOUBLE PRECISION", "nullable": true, "description": "13시 방문 비율"},
-      "ct_14_rt": {"type": "DOUBLE PRECISION", "nullable": true, "description": "14시 방문 비율"},
-      "ct_15_rt": {"type": "DOUBLE PRECISION", "nullable": true, "description": "15시 방문 비율"},
-      "ct_16_rt": {"type": "DOUBLE PRECISION", "nullable": true, "description": "16시 방문 비율"},
-      "ct_17_rt": {"type": "DOUBLE PRECISION", "nullable": true, "description": "17시 방문 비율"},
-      "ct_18_rt": {"type": "DOUBLE PRECISION", "nullable": true, "description": "18시(저녁) 방문 비율"},
-      "ct_19_rt": {"type": "DOUBLE PRECISION", "nullable": true, "description": "19시 방문 비율"},
-      "ct_20_rt": {"type": "DOUBLE PRECISION", "nullable": true, "description": "20시 방문 비율"},
-      "ct_21_rt": {"type": "DOUBLE PRECISION", "nullable": true, "description": "21시 방문 비율"},
-      "ct_22_rt": {"type": "DOUBLE PRECISION", "nullable": true, "description": "22시 방문 비율"},
-      "ct_23_rt": {"type": "DOUBLE PRECISION", "nullable": true, "description": "23시 방문 비율"},
-      
-      "ct_week_01": {"type": "DOUBLE PRECISION", "nullable": true, "description": "월요일 방문 비율"},
-      "ct_week_02": {"type": "DOUBLE PRECISION", "nullable": true, "description": "화요일 방문 비율"},
-      "ct_week_03": {"type": "DOUBLE PRECISION", "nullable": true, "description": "수요일 방문 비율"},
-      "ct_week_04": {"type": "DOUBLE PRECISION", "nullable": true, "description": "목요일 방문 비율"},
-      "ct_week_05": {"type": "DOUBLE PRECISION", "nullable": true, "description": "금요일 방문 비율"},
-      "ct_week_06": {"type": "DOUBLE PRECISION", "nullable": true, "description": "토요일 방문 비율"},
-      "ct_week_07": {"type": "DOUBLE PRECISION", "nullable": true, "description": "일요일 방문 비율"}
+    "desc": "방문자 페르소나 상세지표 (LG U+)",
+    "cols": {
+      "cutr_facl_id": "시설ID(FK,BIGINT) - facilities 연결",
+      "cri_ym": "기준연월(INT) - YYYYMM 형식",
+      "persona_pct_20_male~70_male": "20~70대 남성비율(FLOAT)",
+      "persona_pct_20_female~70_female": "20~70대 여성비율(FLOAT)",
+      "persona_foreign_rt": "외국인비율(FLOAT)",
+      "income_01~03": "저/중/고소득층 비율(FLOAT)",
+      "clt_ev_acti_inrt_tndc_score": "문화이벤트 관심성향(FLOAT)",
+      "dom_trv_inrt_tndc_score": "국내여행 관심성향(FLOAT)",
+      "frn_trv_inrt_tndc_score": "해외여행 관심성향(FLOAT)",
+      "prmm_csm_tndc_score": "프리미엄소비 성향(FLOAT)",
+      "prc_snsv_csm_tndc_score": "가격민감 소비성향(FLOAT)",
+      "we_rt": "주말방문비율(FLOAT)",
+      "wk_rt": "평일방문비율(FLOAT)",
+      "ct_00_rt~ct_23_rt": "시간대별 방문비율(FLOAT) - 0~23시",
+      "ct_week_01~07": "요일별 방문비율(FLOAT) - 월~일"
     },
-    "primary_key": "id",
-    "foreign_keys": {"cutr_facl_id": "facilities.cutr_facl_id"},
-    "searchable_fields": ["cutr_facl_id", "cri_ym"]
+    "search": ["cutr_facl_id", "cri_ym"]
   },
 
-  "advanced_reports": {
-    "description": "LangGraph 에이전트가 생성한 AI 분석 보고서 (기존 API)",
-    "row_count": 234,
-    "columns": {
-      "id": {"type": "INTEGER", "nullable": false, "description": "보고서 ID (PK)"},
-      "organization_name": {"type": "VARCHAR(255)", "nullable": false, "description": "분석 대상 기관명"},
-      "user_command": {"type": "TEXT", "nullable": false, "description": "사용자 요청 명령"},
-      "report_topic": {"type": "VARCHAR(500)", "nullable": false, "description": "보고서 주제"},
-      "final_report": {"type": "TEXT", "nullable": false, "description": "최종 보고서 본문 (Markdown)"},
-      "research_sources_json": {"type": "TEXT", "nullable": true, "description": "참고 출처 목록 (JSON)"},
-      "analysis_summary": {"type": "TEXT", "nullable": true, "description": "분석 요약"},
-      "created_at": {"type": "TIMESTAMP", "nullable": false, "description": "생성 일시"},
-      "parent_report_id": {"type": "INTEGER", "nullable": true, "description": "부모 보고서 ID (하위 보고서인 경우)"},
-      "depth": {"type": "INTEGER", "nullable": false, "description": "보고서 계층 깊이 (0: 원본)"},
-      "report_type": {"type": "VARCHAR(20)", "nullable": false, "description": "보고서 유형 (user/operator)"},
-      "analysis_target_dates": {"type": "TEXT", "nullable": true, "description": "분석 대상 날짜 (JSON 배열)"}
+  "lguplus_dpg_api_tot": {
+    "desc": "LG U+ 방문자 통계 API 데이터",
+    "cols": {
+      "base_yymm": "기준연월(BIGINT) - YYYYMM",
+      "cutr_facl_id": "시설ID(BIGINT)",
+      "cutr_facl_all_nm": "시설전체명(TEXT)",
+      "cutr_facl_clss_nm": "시설분류(TEXT)",
+      "cutr_facl_addr": "주소(TEXT)",
+      "vstr_cnt": "방문자수(FLOAT)",
+      "m_00~m_70": "남성 연령대별 비율(FLOAT) - 0~70대",
+      "f_00~f_70": "여성 연령대별 비율(FLOAT) - 0~70대",
+      "tmz_cnt_00~23": "시간대별 방문수(FLOAT) - 0~23시",
+      "week_01~07": "요일별 방문수(FLOAT) - 월~일"
     },
-    "primary_key": "id",
-    "searchable_fields": ["organization_name", "report_topic", "user_command"]
+    "search": ["cutr_facl_id", "cutr_facl_all_nm", "base_yymm"]
   },
 
-  "block_reports": {
-    "description": "Server-Driven UI 블록 기반 보고서 (v2 API)",
-    "row_count": 14,
-    "columns": {
-      "id": {"type": "INTEGER", "nullable": false, "description": "보고서 ID (PK)"},
-      "organization_name": {"type": "VARCHAR(255)", "nullable": false, "description": "분석 대상 기관명"},
-      "user_command": {"type": "TEXT", "nullable": false, "description": "사용자 요청 명령"},
-      "report_topic": {"type": "VARCHAR(500)", "nullable": false, "description": "보고서 주제"},
-      "report_type": {"type": "VARCHAR(20)", "nullable": false, "description": "보고서 유형 (user/operator)"},
-      "blocks_json": {"type": "JSONB", "nullable": false, "description": "보고서 블록 배열 (Server-Driven UI)"},
-      "final_report": {"type": "TEXT", "nullable": true, "description": "마크다운 보고서 (호환성용)"},
-      "research_sources_json": {"type": "TEXT", "nullable": true, "description": "참고 출처 목록 (JSON)"},
-      "analysis_target_dates_json": {"type": "TEXT", "nullable": true, "description": "분석 대상 날짜 (JSON)"},
-      "generation_time_seconds": {"type": "DOUBLE PRECISION", "nullable": false, "description": "보고서 생성 시간 (초)"},
-      "created_at": {"type": "TIMESTAMP", "nullable": false, "description": "생성 일시"}
+  "lguplus_dpg_persona_tot": {
+    "desc": "LG U+ 방문자 페르소나 데이터",
+    "cols": {
+      "base_yymm": "기준연월(BIGINT)",
+      "cutr_facl_id": "시설ID(BIGINT)",
+      "cutr_facl_all_nm": "시설전체명(TEXT)",
+      "female_rt": "여성비율(FLOAT)",
+      "male_rt": "남성비율(FLOAT)",
+      "frgr_rt": "외국인비율(FLOAT)",
+      "wkdy_rt": "평일비율(FLOAT)",
+      "wknd_rt": "주말비율(FLOAT)",
+      "age_2030_rt": "20~30대 비율(FLOAT)",
+      "age_4050_rt": "40~50대 비율(FLOAT)",
+      "age_60abv_rt": "60대이상 비율(FLOAT)",
+      "fmal_age_20_rt~70abv_rt": "여성 연령대별 비율(FLOAT)",
+      "mal_age_20_rt~70abv_rt": "남성 연령대별 비율(FLOAT)",
+      "kids_mom_rt": "육아맘 비율(FLOAT)",
+      "resi_rt": "거주민 비율(FLOAT)",
+      "trvl_rt": "여행객 비율(FLOAT)"
     },
-    "primary_key": "id",
-    "searchable_fields": ["organization_name", "report_topic", "user_command"]
+    "search": ["cutr_facl_id", "cutr_facl_all_nm", "base_yymm"]
+  },
+
+  "nice_delicious_foods": {
+    "desc": "NICE 주변 맛집 정보",
+    "cols": {
+      "cutr_facl_id": "시설ID(BIGINT)",
+      "cutr_facl_all_nm": "시설명(TEXT)",
+      "yyyyhalf": "기준반기(TEXT) - 예: 2024H1",
+      "gubun": "구분(TEXT)",
+      "store_nm": "가게명(TEXT)",
+      "addr": "주소(TEXT)",
+      "upjong1_nm~3_nm": "업종분류1~3(TEXT)",
+      "sale_amt_20m~70mover": "남성 연령대별 매출(FLOAT)",
+      "sale_amt_20w~70wover": "여성 연령대별 매출(FLOAT)",
+      "sale_amt_sun~sat": "요일별 매출(FLOAT)",
+      "sale_amt_0006~2124": "시간대별 매출(FLOAT)"
+    },
+    "search": ["cutr_facl_id", "store_nm"]
+  },
+
+  "nice_lodgments": {
+    "desc": "NICE 주변 숙박 정보",
+    "cols": {
+      "cutr_facl_id": "시설ID(BIGINT)",
+      "cutr_facl_all_nm": "시설명(TEXT)",
+      "yyyyhalf": "기준반기(TEXT)",
+      "store_nm": "숙박업소명(TEXT)",
+      "addr": "주소(TEXT)",
+      "upjong1_nm~3_nm": "업종분류1~3(TEXT)"
+    },
+    "search": ["cutr_facl_id", "store_nm"]
+  },
+
+  "nice_persona": {
+    "desc": "NICE 방문자 페르소나",
+    "cols": {
+      "cutr_facl_id": "시설ID(BIGINT)",
+      "cutr_facl_all_nm": "시설명(TEXT)",
+      "yyyyhalf": "기준반기(TEXT)",
+      "sum_sale_amt_grade": "매출등급(TEXT)",
+      "seg_type1~5": "세그먼트유형1~5(TEXT)",
+      "subway_gubun": "지하철인접구분(TEXT)",
+      "univ_gubun": "대학인접구분(TEXT)",
+      "upjong_type1~7": "업종유형1~7(TEXT)"
+    },
+    "search": ["cutr_facl_id"]
+  },
+
+  "nice_recommended_menus": {
+    "desc": "NICE 추천 메뉴",
+    "cols": {
+      "cutr_facl_id": "시설ID(BIGINT)",
+      "cutr_facl_all_nm": "시설명(TEXT)",
+      "yyyyhalf": "기준반기(TEXT)",
+      "gubun": "구분(TEXT)",
+      "menu1_nm~3_nm": "추천메뉴1~3(TEXT)",
+      "sum_sale_amt": "총매출액(FLOAT)"
+    },
+    "search": ["cutr_facl_id"]
   }
 }

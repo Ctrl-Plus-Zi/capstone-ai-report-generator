@@ -1,5 +1,7 @@
 """
 Query Executor - DB 쿼리 순차 실행 및 통계 계산
+
+capstone DB에서 팀원 데이터를 조회합니다.
 """
 
 import json
@@ -8,7 +10,7 @@ import re
 from typing import List, Dict, Any, Annotated, Optional
 from langchain_core.tools import tool
 
-from app.db.context import get_db_context
+from app.db.context import get_capstone_db_context
 from app.agents.db_query_tool import DBQueryTool
 
 logger = logging.getLogger("uvicorn.error")
@@ -102,7 +104,7 @@ def _calculate_review_stats(reviews: List[Dict]) -> Dict[str, Any]:
 
 
 def _calculate_demographics_stats(demographics: List[Dict]) -> Dict[str, Any]:
-    """인구통계 연령/성별 분포 통계 계산"""
+    """인구통계 연령/성별 분포 통계 계산 (LG U+, 삼성카드, 페르소나 형식 지원)"""
     if not demographics:
         return {
             "has_data": False,
@@ -110,29 +112,57 @@ def _calculate_demographics_stats(demographics: List[Dict]) -> Dict[str, Any]:
         }
     
     data = demographics[0]
+    keys = list(data.keys())
+    logger.info(f"[QUERY_EXECUTOR] demographics 키: {keys[:15]}")
     
-    logger.info(f"[QUERY_EXECUTOR] demographics 키: {list(data.keys())[:15]}")
-    
-    prefix = "mrcno_pct_" if "mrcno_pct_20_male" in data else "persona_pct_"
-    logger.info(f"[QUERY_EXECUTOR] demographics 접두사: {prefix}")
-    
-    sample_keys = [f"{prefix}20_male", f"{prefix}30_male", f"{prefix}40_male"]
-    sample_vals = {k: data.get(k) for k in sample_keys}
-    logger.info(f"[QUERY_EXECUTOR] demographics 샘플 값: {sample_vals}")
-    
-    age_groups = ["20", "30", "40", "50", "60", "70"]
     age_stats = {}
     gender_stats = {"male": 0, "female": 0}
     
-    for age in age_groups:
-        male_key = f"{prefix}{age}_male"
-        female_key = f"{prefix}{age}_female"
-        male_val = float(data.get(male_key, 0) or 0) * 100
-        female_val = float(data.get(female_key, 0) or 0) * 100
-        
-        age_stats[f"{age}대"] = round(male_val + female_val, 1)
-        gender_stats["male"] += male_val
-        gender_stats["female"] += female_val
+    # LG U+ lguplus_dpg_api_tot 형식: m_20, f_20, ...
+    if "m_20" in data:
+        logger.info(f"[QUERY_EXECUTOR] LG U+ API 형식 감지 (m_20, f_20...)")
+        age_groups = ["20", "30", "40", "50", "60", "70"]
+        for age in age_groups:
+            male_val = float(data.get(f"m_{age}", 0) or 0)
+            female_val = float(data.get(f"f_{age}", 0) or 0)
+            age_stats[f"{age}대"] = round(male_val + female_val, 1)
+            gender_stats["male"] += male_val
+            gender_stats["female"] += female_val
+    
+    # 삼성카드 mrcno_demographics 형식: mrcno_pct_20_male, ...
+    elif "mrcno_pct_20_male" in data:
+        logger.info(f"[QUERY_EXECUTOR] 삼성카드 형식 감지 (mrcno_pct_...)")
+        age_groups = ["20", "30", "40", "50", "60", "70"]
+        for age in age_groups:
+            male_val = float(data.get(f"mrcno_pct_{age}_male", 0) or 0) * 100
+            female_val = float(data.get(f"mrcno_pct_{age}_female", 0) or 0) * 100
+            age_stats[f"{age}대"] = round(male_val + female_val, 1)
+            gender_stats["male"] += male_val
+            gender_stats["female"] += female_val
+    
+    # 페르소나 형식: persona_pct_20_male, ...
+    elif "persona_pct_20_male" in data:
+        logger.info(f"[QUERY_EXECUTOR] 페르소나 형식 감지 (persona_pct_...)")
+        age_groups = ["20", "30", "40", "50", "60", "70"]
+        for age in age_groups:
+            male_val = float(data.get(f"persona_pct_{age}_male", 0) or 0) * 100
+            female_val = float(data.get(f"persona_pct_{age}_female", 0) or 0) * 100
+            age_stats[f"{age}대"] = round(male_val + female_val, 1)
+            gender_stats["male"] += male_val
+            gender_stats["female"] += female_val
+    
+    else:
+        logger.warning(f"[QUERY_EXECUTOR] 인식되지 않는 demographics 형식")
+        return {
+            "has_data": False,
+            "summary": "인구통계 데이터 형식을 인식할 수 없습니다."
+        }
+    
+    if not age_stats or all(v == 0 for v in age_stats.values()):
+        return {
+            "has_data": False,
+            "summary": "인구통계 데이터가 비어있습니다."
+        }
     
     max_age = max(age_stats, key=age_stats.get)
     max_age_pct = age_stats[max_age]
@@ -199,7 +229,7 @@ params에서 "{save_as.column}" 형식으로 이전 쿼리 결과 참조 가능.
     ## 사용 예시
     
     queries=[
-      {"action": "search", "table": "google_map_facilities", 
+      {"action": "search", "table": "sns_buzz_master_tbl", 
        "params": {"search_column": "slta_nm", "search_value": "예술의전당"}, 
        "save_as": "facility"},
       {"action": "filter", "table": "persona_metrics", 
@@ -211,7 +241,7 @@ params에서 "{save_as.column}" 형식으로 이전 쿼리 결과 참조 가능.
     results = {}
     errors = []
     
-    with get_db_context() as db:
+    with get_capstone_db_context() as db:
         query_tool = DBQueryTool(db)
         
         for i, query in enumerate(queries):

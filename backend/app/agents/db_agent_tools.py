@@ -3,7 +3,7 @@ from typing import Annotated, Optional, Dict, Any, List
 import json
 import os
 
-from app.db.context import get_db_context
+from app.db.context import get_capstone_db_context
 from app.agents.db_query_tool import (
     query_cultural_facility_data,
     query_with_filters,
@@ -20,23 +20,21 @@ def load_db_configs():
 
 
 def get_db_schema_info() -> str:
-    """에이전트에게 제공할 DB 스키마 정보를 문자열로 반환"""
+    """에이전트에게 제공할 DB 스키마 정보를 문자열로 반환 (간결한 형식)"""
     configs = load_db_configs()
     
-    schema_info = "=== 사용 가능한 데이터베이스 테이블 정보 ===\n\n"
+    lines = ["# DB 테이블 스키마"]
     
     for table_name, table_info in configs.items():
-        schema_info += f"테이블: {table_name}\n"
-        schema_info += f"   설명: {table_info['description']}\n"
-        schema_info += f"   컬럼 목록:\n"
+        lines.append(f"\n## {table_name}")
+        lines.append(f"{table_info['desc']}")
+        lines.append(f"검색필드: {', '.join(table_info['search'])}")
+        lines.append("컬럼:")
         
-        for col_name, col_desc in table_info['columns'].items():
-            schema_info += f"     - {col_name}: {col_desc}\n"
-        
-        schema_info += f"   검색 가능 필드: {', '.join(table_info['searchable_fields'])}\n"
-        schema_info += "\n"
+        for col_name, col_desc in table_info['cols'].items():
+            lines.append(f"  {col_name}: {col_desc}")
     
-    return schema_info
+    return "\n".join(lines)
 
 
 @tool
@@ -60,7 +58,7 @@ def search_database(
     Returns:
         JSON 형태의 조회 결과
     """
-    with get_db_context() as db:
+    with get_capstone_db_context() as db:
         result = query_cultural_facility_data(
             table_name=table_name,
             search_column=search_column,
@@ -97,7 +95,7 @@ def filter_database(
     except json.JSONDecodeError:
         return json.dumps({"error": "filters는 유효한 JSON 문자열이어야 합니다."}, ensure_ascii=False)
     
-    with get_db_context() as db:
+    with get_capstone_db_context() as db:
         result = query_with_filters(
             table_name=table_name,
             filters=filter_dict,
@@ -134,7 +132,7 @@ def query_with_range_filter(
     Returns:
         JSON 형태의 조회 결과
     """
-    with get_db_context() as db:
+    with get_capstone_db_context() as db:
         result = query_with_range_and_search(
             table_name=table_name,
             search_column=search_column,
@@ -172,7 +170,7 @@ def get_aggregated_statistics(
     Returns:
         JSON 형태의 집계 결과 (내림차순으로 정렬됨)
     """
-    with get_db_context() as db:
+    with get_capstone_db_context() as db:
         result = get_aggregate_statistics(
             table_name=table_name,
             group_by=group_by,

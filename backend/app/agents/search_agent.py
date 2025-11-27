@@ -131,20 +131,20 @@ def create_search_agent(llm, toolkit):
         query_examples = """
 ## 쿼리 예시
 
-### 시설 검색 -> slta_cd 획득
-{"action": "search", "table": "google_map_facilities", "params": {"search_column": "slta_nm", "search_value": "기관명"}, "save_as": "facility"}
+### SNS버즈 시설 검색 -> slta_cd 획득 (구글맵 리뷰용)
+{"action": "search", "table": "sns_buzz_master_tbl", "params": {"search_column": "slta_nm", "search_value": "기관명"}, "save_as": "facility"}
 
-### 리뷰 조회 (slta_cd 사용)
-{"action": "filter", "table": "google_map_reviews", "params": {"filters": {"slta_cd": "{facility.slta_cd}"}, "limit": 100}, "save_as": "reviews"}
+### 구글맵 리뷰 조회 (slta_cd 사용)
+{"action": "filter", "table": "sns_buzz_extract_contents", "params": {"filters": {"slta_cd": "{facility.slta_cd}"}, "limit": 100}, "save_as": "reviews"}
 
-### 시설 정보 검색 -> cutr_facl_id 획득
-{"action": "search", "table": "facilities", "params": {"search_column": "mrc_snbd_nm", "search_value": "기관명"}, "save_as": "facility_info"}
+### LG U+ API에서 시설 검색 -> cutr_facl_id 획득 (인구통계용)
+{"action": "search", "table": "lguplus_dpg_api_tot", "params": {"search_column": "cutr_facl_all_nm", "search_value": "기관명"}, "save_as": "lgu_facility"}
 
-### 인구통계 조회
-{"action": "filter", "table": "mrcno_demographics", "params": {"filters": {"cutr_facl_id": "{facility_info.cutr_facl_id}"}, "limit": 12}, "save_as": "demographics"}
+### LG U+ 방문자 통계 조회
+{"action": "filter", "table": "lguplus_dpg_api_tot", "params": {"filters": {"cutr_facl_id": "{lgu_facility.cutr_facl_id}"}, "limit": 12}, "save_as": "demographics"}
 
-### 페르소나 지표 조회
-{"action": "filter", "table": "persona_metrics", "params": {"filters": {"cutr_facl_id": "{facility_info.cutr_facl_id}"}, "limit": 12}, "save_as": "persona"}
+### LG U+ 페르소나 조회
+{"action": "filter", "table": "lguplus_dpg_persona_tot", "params": {"filters": {"cutr_facl_id": "{lgu_facility.cutr_facl_id}"}, "limit": 12}, "save_as": "persona"}
 """.replace('{', '{{').replace('}', '}}')
         
         db_plan_prompt = ChatPromptTemplate.from_messages([
@@ -193,14 +193,21 @@ def create_search_agent(llm, toolkit):
             db_response = None
         
         default_queries = [
-            {"action": "search", "table": "google_map_facilities",
+            # 1. SNS 버즈 시설 검색 (구글맵 리뷰용)
+            {"action": "search", "table": "sns_buzz_master_tbl",
              "params": {"search_column": "slta_nm", "search_value": org_name}, "save_as": "facility"},
-            {"action": "filter", "table": "google_map_reviews",
+            # 2. 구글맵 리뷰 조회
+            {"action": "filter", "table": "sns_buzz_extract_contents",
              "params": {"filters": {"slta_cd": "{facility.slta_cd}"}, "limit": 100}, "save_as": "reviews"},
-            {"action": "search", "table": "facilities",
-             "params": {"search_column": "mrc_snbd_nm", "search_value": org_name}, "save_as": "facility_info"},
-            {"action": "filter", "table": "mrcno_demographics",
-             "params": {"filters": {"cutr_facl_id": "{facility_info.cutr_facl_id}"}, "limit": 12}, "save_as": "demographics"}
+            # 3. LG U+ API에서 시설 검색 (인구통계용 cutr_facl_id 획득)
+            {"action": "search", "table": "lguplus_dpg_api_tot",
+             "params": {"search_column": "cutr_facl_all_nm", "search_value": org_name}, "save_as": "lgu_facility"},
+            # 4. LG U+ 방문자 통계
+            {"action": "filter", "table": "lguplus_dpg_api_tot",
+             "params": {"filters": {"cutr_facl_id": "{lgu_facility.cutr_facl_id}"}, "limit": 12}, "save_as": "demographics"},
+            # 5. LG U+ 페르소나
+            {"action": "filter", "table": "lguplus_dpg_persona_tot",
+             "params": {"filters": {"cutr_facl_id": "{lgu_facility.cutr_facl_id}"}, "limit": 12}, "save_as": "persona"}
         ]
         default_stats = ["review_stats", "demographics_stats"]
         

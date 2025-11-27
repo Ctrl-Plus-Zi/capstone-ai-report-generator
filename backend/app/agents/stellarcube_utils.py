@@ -1,11 +1,11 @@
 """
 스텔라큐브 데이터 조회 유틸리티
-AWS RDS에서 월별 연령대 비율 데이터를 조회합니다.
+AWS RDS capstone DB에서 월별 연령대 비율 데이터를 조회합니다.
 """
 from typing import Dict, List, Optional, Any
 from sqlalchemy import create_engine, text
 from app.config import settings
-from app.db.session import SessionLocal
+from app.db.session import CapstoneSessionLocal
 
 
 # 기관명 매핑
@@ -63,8 +63,8 @@ def get_monthly_age_gender_ratio(
     try:
         db_org_name = get_organization_name_for_query(organization_name)
         
-        # 데이터베이스 연결
-        db = SessionLocal()
+        # capstone DB 연결 (팀원 데이터)
+        db = CapstoneSessionLocal()
         try:
             # persona_metrics 테이블 사용 (문화시설 전체의 방문자 통계)
             # facilities 테이블과 조인하여 기관명으로 필터링

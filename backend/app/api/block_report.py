@@ -1,7 +1,7 @@
 """Server-Driven Report UI API 엔드포인트
 
 /report/v2 엔드포인트는 블록 기반 보고서를 생성합니다.
-block_reports 테이블에 저장됩니다.
+block_reports 테이블에 저장됩니다. (capstone DB)
 """
 
 import json
@@ -12,7 +12,7 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.db.session import get_db
+from app.db.session import get_capstone_db
 from app.models.block_report import BlockReport
 from app.schemas.block_report import BlockReportRequest, BlockReportResponse
 from app.services.block_report_service import block_report_service
@@ -25,7 +25,7 @@ router = APIRouter(prefix="/report", tags=["block-report"])
 @router.post("/v2", response_model=BlockReportResponse)
 async def generate_block_report(
     request: BlockReportRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_capstone_db)
 ):
     """Server-Driven UI 블록 기반 보고서를 생성하고 DB에 저장합니다.
     
@@ -90,7 +90,7 @@ async def generate_block_report(
 @router.get("/v2/{report_id}", response_model=BlockReportResponse)
 async def get_block_report(
     report_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_capstone_db)
 ):
     """저장된 블록 보고서를 조회합니다."""
     try:
@@ -141,7 +141,7 @@ async def list_block_reports(
     organization_name: str = None,
     limit: int = 20,
     offset: int = 0,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_capstone_db)
 ):
     """저장된 블록 보고서 목록을 조회합니다."""
     try:

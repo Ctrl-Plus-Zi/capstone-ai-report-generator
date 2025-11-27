@@ -1,11 +1,11 @@
 """
 구글맵 리뷰 평점 통계 조회 유틸리티
-AWS RDS에서 구글맵 리뷰 데이터를 조회하여 평점 통계를 계산합니다.
+AWS RDS capstone DB에서 구글맵 리뷰 데이터를 조회하여 평점 통계를 계산합니다.
 """
 from typing import Dict, Any, Optional
 from sqlalchemy import create_engine, text
 from app.config import settings
-from app.db.session import SessionLocal
+from app.db.session import CapstoneSessionLocal
 
 
 # 기관명 → 시설명 매핑 (google_map_facilities.slta_nm과 매칭)
@@ -58,11 +58,11 @@ def get_google_map_rating_statistics(
         # 기관명을 시설명으로 변환 (필요시)
         facility_name = GOOGLE_MAP_ORG_MAPPING.get(organization_name, organization_name)
         
-        # 데이터베이스 연결
-        db = SessionLocal()
+        # capstone DB 연결 (팀원 데이터)
+        db = CapstoneSessionLocal()
         try:
-            # google_map_facilities와 google_map_reviews를 조인하여 평점 통계 계산
-            # 기관명 매칭: facilities.mrc_snbd_nm과 google_map_facilities.slta_nm을 유사도 기반으로 검색
+            # sns_buzz_master_tbl과 sns_buzz_extract_contents를 조인하여 평점 통계 계산
+            # 기관명 매칭: facilities.mrc_snbd_nm과 sns_buzz_master_tbl.slta_nm을 유사도 기반으로 검색
             # LIKE 패턴 매칭을 사용하여 기관명이 정확히 일치하지 않아도 유사한 시설을 찾을 수 있음
             query = text("""
                 SELECT 
@@ -73,9 +73,9 @@ def get_google_map_rating_statistics(
                     COUNT(CASE WHEN gmr.sns_content_rating = 3 THEN 1 END) as rating_3,
                     COUNT(CASE WHEN gmr.sns_content_rating = 2 THEN 1 END) as rating_2,
                     COUNT(CASE WHEN gmr.sns_content_rating = 1 THEN 1 END) as rating_1
-                FROM google_map_reviews gmr
-                JOIN google_map_facilities gmf ON gmr.slta_cd = gmf.slta_cd
-                LEFT JOIN facilities f ON gmf.cutr_facl_id = f.cutr_facl_id
+                FROM sns_buzz_extract_contents gmr
+                JOIN sns_buzz_master_tbl gmf ON gmr.slta_cd = gmf.slta_cd
+                LEFT JOIN facilities f ON f.mrc_snbd_nm LIKE gmf.slta_nm
                 WHERE gmr.sns_type = 'googlemap'
                     AND gmr.sns_content_rating IS NOT NULL
                     AND (
