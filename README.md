@@ -6,9 +6,9 @@
 
 ### 사용 영상
 
-<video src="docs/video/video1.mp4" controls width="100%"></video>
+https://github.com/Ctrl-Plus-Zi/capstone-ai-report-generator/raw/main/docs/video/video1.mp4
 
-<video src="docs/video/video2.mp4" controls width="100%"></video>
+https://github.com/Ctrl-Plus-Zi/capstone-ai-report-generator/raw/main/docs/video/video2.mp4
 
 ### 스크린샷
 
