@@ -31,6 +31,116 @@ https://github.com/user-attachments/assets/4ebfcadd-9a3e-464e-a6a3-55923840e217
 - **지능형 레이아웃**: LLM 기반 레이아웃 최적화로 가독성 높은 보고서 구성
 - **Server-Driven UI**: 백엔드에서 정의된 블록 구조를 프론트엔드가 동적으로 렌더링
 
+### RDS 스키마 요약 - 핵심 컬럼
+#1) facilities : 프로젝트에서 사용하는 “모든 시설의 공통 기준 테이블”
+삼성·LG·NICE·KCISA 등 모든 데이터의 Facility Join Key 역할.
+cutr_facl_id — 시설 고유 ID (모든 외부데이터와 연결하는 핵심 PK)
+mrc_snbd_nm — 시설명
+tco_tobz_c — 업종코드
+lon, lat — 위경도
+nasd_c, pnu — 행정동 및 필지 식별 값
+
+#2) mrcno_demographics (삼성카드 인구통계) : 월별 방문자 연령·성별·외국인 비율 등 통계
+cutr_facl_id — 시설 ID
+cri_ym — 기준연월
+mrcno_pct_20_male, mrcno_pct_30_female — 연령·성별 비율
+mrcno_foreign_rt — 외국인 방문 비율
+
+#3) lguplus_dpg_api_tot (LG 전체 방문통계) : LG U+ 이동통신 기반 유동인구 통계
+cutr_facl_id
+base_yymm — 기준년월
+vstr_cnt — 전체 방문자 수
+m_20, f_20 등 — 남/녀 연령대별 방문량
+tmz_cnt_00 ~ 23 — 시간대별 방문량
+week_01 ~ week_07 — 요일별 방문량
+
+#4) lguplus_dpg_persona_tot (LG 페르소나 요약) : 시설별 방문자 유형(페르소나) 정보
+cutr_facl_id
+cri_ym
+persona_age_male/female — 연령대별 비율
+income_01~03 — 소득군
+interest_scores — 여행/문화/디지털 등 관심지수
+
+#5) persona_metrics (LG 페르소나 + 방문시간대 종합) : LG API 기반 방문자 특성 종합 버전
+cutr_facl_id, cri_ym
+persona_pct_20_male 등 연령/성별 비율
+dom_trv_inrt_tndc_score 등 7대 성향 점수
+we_rt, wk_rt — 주말/평일 방문 비율
+ct_00_rt ~ ct_23_rt — 24시간대 방문 비율
+
+#6) sns_buzz_master_tbl : SNS 버즈(구글맵 등) 시설 기본 정보
+slta_cd — SNS 시설코드
+slta_nm — 시설명
+slta_type — 유형
+slta_addr, slta_cor_x_axis, slta_cor_y_axis — 위치
+
+#7) sns_buzz_extract_contents : SNS/Google Map 리뷰 텍스트
+buzz_id — 리뷰 ID
+slta_cd — 연결된 시설 코드
+sns_content_original_text — 리뷰 원문
+sns_content_rating — 평점
+
+#8) nice_delicious_foods : NICE 외식업 매출 분석 데이터 (반기 단위)
+idx — 고유 ID
+yyyyhalf — 기준 반기
+cutr_facl_id — 시설
+sale_amt_20m, sale_amt_40w — 성별·연령대별 매출
+sale_amt_sun ~ sat — 요일별 매출
+
+#9) nice_lodgments (숙박업)
+idx
+yyyyhalf
+cutr_facl_id
+sum_sale_amt_grade — 매출 등급
+seg_type1~5 — 시장 세그먼트
+upjong_type1~7 — 업종 구분
+m_open_grade — 운영등급
+
+#10) nice_persona
+cutr_facl_id
+yyyyhalf
+seg_type1~5
+persona factors — NICE 정의군
+
+#11) nice_recommended_menus
+idx
+cutr_facl_id
+yyyyhalf
+menu1_nm~menu3_nm
+sum_sale_amt — 추천메뉴 기반 총매출
+
+#12) nice_report
+cutr_facl_id
+yyyyhalf
+sum_sale_amt_grade
+seg_type1~5
+upjong_type1~7
+
+//API 정보(#13~#15)
+#13) kcisa_culture_events (CCA_144)
+local_id — 콘텐츠 ID
+title
+description
+event_site
+genre
+period
+
+#14) kcisa_culture_events_2 (CCA_145)
+local_id
+title
+cntc_instt_nm
+event_site
+genre
+issued_date
+event_period
+
+#15) kcisa_cpm (CPM_003)
+localid
+title
+artist
+description
+url
+
 ### 시스템 아키텍처
 
 #### 데이터 흐름 요약
