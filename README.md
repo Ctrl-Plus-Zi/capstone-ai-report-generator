@@ -2,6 +2,24 @@
 
 문화시설(공연장, 미술관, 관광지 등)에 대한 다차원 데이터를 수집·분석하여 Server-Driven UI 기반의 인터랙티브 보고서를 자동 생성하는 플랫폼입니다.
 
+## 데모
+
+### 사용 영상
+
+<video src="docs/video/video1.mp4" controls width="100%"></video>
+
+<video src="docs/video/video2.mp4" controls width="100%"></video>
+
+### 스크린샷
+
+<p align="center">
+  <img src="docs/image/image1.png" width="80%" alt="스크린샷 1">
+</p>
+
+<p align="center">
+  <img src="docs/image/image2.png" width="80%" alt="스크린샷 2">
+</p>
+
 ## 프로젝트 개요
 
 본 플랫폼은 LangGraph 기반의 멀티 에이전트 시스템을 활용하여 데이터 수집부터 보고서 레이아웃 구성까지 전 과정을 자동화합니다.
