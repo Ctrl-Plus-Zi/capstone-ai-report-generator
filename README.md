@@ -85,6 +85,17 @@ https://github.com/user-attachments/assets/4ebfcadd-9a3e-464e-a6a3-55923840e217
 이미지 링크
 작품/작가 정보
 → 문화시설 주변 콘텐츠 추천·연계 분석에 활용
+
+### Open API 활용
+
+| ID             | API 이름                     | 제공 기관             | Base URL                                                             | 주요 데이터                          | 프로젝트에서 사용                         |
+|----------------|------------------------------|-----------------------|----------------------------------------------------------------------|--------------------------------------|-------------------------------------------|
+| KCISA_CPM_003  | 국립중앙박물관 소장품 검색   | 한국문화정보원(KCISA) | https://api.kcisa.kr/openapi/API_CPM_003/request                    | 국립중앙박물관 소장품 메타데이터     | 설명 필드에 ‘호랑이’가 포함된 소장품만 사용 |
+| KCISA_CCA_145  | 전시정보(통합)              | 한국문화정보원(KCISA) | https://api.kcisa.kr/openapi/API_CCA_145/request                    | 전시·문화행사 메타데이터            | URL에 `www.mmca.go.kr` 포함 → 국현미만 사용 |
+| KCISA_CCA_144  | 공연정보(통합)              | 한국문화정보원(KCISA) | https://api.kcisa.kr/openapi/API_CCA_144/request                    | 공연 정보 메타데이터                 | CNTC_INSTT_NM으로 기관별 공연 선별        |
+| KMA_ASOS_DAILY | 기상청 ASOS 일자료(일별)     | 기상청(KMA)           | https://apis.data.go.kr/1360000/AsosDalyInfoService/getWthrDataList | 서울(108) 일별 기상 통계             | 선택 기간의 일강수량·최고/최저기온 조회    |
+
+
 ### 시스템 아키텍처
 
 #### 데이터 흐름 요약
